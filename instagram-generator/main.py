@@ -576,8 +576,13 @@ def webhook(port: int):
     click.echo(f"    GET  /queue             — View content queue")
     click.echo(f"    GET  /calendar          — View content calendar")
     click.echo(f"    GET  /analytics         — Analytics report")
+    click.echo(f"    GET  /trends            — Trending topics")
+    click.echo(f"    GET  /review            — Content review queue")
     click.echo(f"    POST /webhook/instagram — Instagram webhook")
     click.echo(f"    POST /trigger/generate  — Trigger content generation")
+    click.echo(f"    POST /trigger/trends    — Auto-enqueue trending topics")
+    click.echo(f"    POST /review/approve/ID — Approve content for publishing")
+    click.echo(f"    POST /review/reject/ID  — Reject content")
     click.echo(f"  Press Ctrl+C to stop.\n")
 
     asyncio.run(start_webhook_server(port))
@@ -744,6 +749,156 @@ def status():
     q = ContentQueue()
     stats = q.get_stats()
     click.echo(f"\n  Queue: {', '.join(f'{k}={v}' for k, v in stats.items())}")
+
+    # Token status
+    try:
+        from utils.token_refresh import TokenRefresher
+        refresher = TokenRefresher()
+        ts = refresher.get_status()
+        click.echo(f"\n  Instagram Token:")
+        click.echo(f"    Configured: {ts['configured']}")
+        click.echo(f"    Expires: {ts['expires_at']}")
+        click.echo(f"    Days remaining: {ts['days_remaining']}")
+        if ts['needs_refresh']:
+            click.echo(f"    WARNING: Token needs refresh!")
+    except Exception:
+        pass
+
+
+# =====================================================================
+# batch command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--from-queue", is_flag=True, help="Process items from queue")
+@click.option("--limit", "-l", default=10, help="Max items to process")
+@click.option("--concurrency", "-c", default=1, help="Parallel workers (1=sequential)")
+def batch(from_queue: bool, limit: int, concurrency: int):
+    """Batch process multiple content items."""
+    from pipeline.batch import BatchProcessor
+
+    processor = BatchProcessor(concurrency=concurrency)
+
+    if from_queue:
+        click.echo(f"  Batch processing up to {limit} items from queue...")
+        click.echo(f"  Concurrency: {concurrency}")
+
+        async def _run():
+            result = await processor.process_queue(limit=limit)
+            click.echo(result.display())
+
+        asyncio.run(_run())
+    else:
+        click.echo("  Use --from-queue to process queue items.")
+        click.echo("  Example: python main.py batch --from-queue -l 5 -c 2")
+
+
+# =====================================================================
+# review command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--pending", is_flag=True, help="Show pending items only")
+@click.option("--approve", default=None, help="Approve item by ID")
+@click.option("--reject", default=None, help="Reject item by ID")
+@click.option("--notes", "-n", default="", help="Reviewer notes")
+def review(pending: bool, approve: str | None, reject: str | None, notes: str):
+    """Manage content approval workflow."""
+    from pipeline.approval import ApprovalWorkflow
+
+    wf = ApprovalWorkflow()
+
+    if approve:
+        item = wf.approve(approve, notes)
+        if item:
+            click.echo(f"  Approved: {approve}")
+            # Auto-enqueue approved content
+            from pipeline.queue import ContentQueue
+            q = ContentQueue()
+            q.enqueue(
+                topic=item.topic,
+                category=item.category,
+                content_type=item.content_type,
+                priority=9,
+            )
+            click.echo("  Added to queue with priority 9.")
+        else:
+            click.echo(f"  Item {approve} not found or not pending.", err=True)
+    elif reject:
+        item = wf.reject(reject, notes)
+        if item:
+            click.echo(f"  Rejected: {reject}")
+        else:
+            click.echo(f"  Item {reject} not found or not pending.", err=True)
+    else:
+        filter_status = "pending" if pending else ""
+        click.echo(wf.display(status_filter=filter_status))
+
+
+# =====================================================================
+# token command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--refresh", is_flag=True, help="Force token refresh")
+@click.option("--check", is_flag=True, help="Check token validity")
+def token(refresh: bool, check: bool):
+    """Manage Instagram access token lifecycle."""
+    from utils.token_refresh import TokenRefresher
+
+    refresher = TokenRefresher()
+
+    if refresh:
+        async def _refresh():
+            new_token = await refresher.refresh()
+            click.echo(f"  Token refreshed: {new_token[:10]}...{new_token[-5:]}")
+
+        asyncio.run(_refresh())
+    elif check:
+        async def _check():
+            token_val = await refresher.check_and_refresh()
+            if token_val:
+                click.echo(f"  Token valid: {token_val[:10]}...{token_val[-5:]}")
+            else:
+                click.echo("  Token not configured.", err=True)
+
+        asyncio.run(_check())
+    else:
+        status = refresher.get_status()
+        click.echo(f"\n  Instagram Token Status:")
+        click.echo(f"    Configured: {status['configured']}")
+        click.echo(f"    Expires: {status['expires_at']}")
+        click.echo(f"    Days remaining: {status['days_remaining']}")
+        click.echo(f"    Needs refresh: {status['needs_refresh']}")
+
+
+# =====================================================================
+# notify command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--test", is_flag=True, help="Send a test notification")
+@click.option("--message", "-m", default="", help="Custom message")
+def notify(test: bool, message: str):
+    """Test notification channels (Telegram, webhook)."""
+    from notifications import NotificationManager
+
+    manager = NotificationManager()
+    click.echo(f"  Telegram: {'enabled' if manager.telegram_enabled else 'disabled'}")
+    click.echo(f"  Webhook:  {'enabled' if manager.webhook_enabled else 'disabled'}")
+
+    if test or message:
+        msg = message or "Test notification from Instagram Content Generator"
+
+        async def _send():
+            await manager.send(msg)
+            click.echo(f"  Sent: {msg[:60]}")
+
+        asyncio.run(_send())
 
 
 if __name__ == "__main__":

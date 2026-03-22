@@ -124,19 +124,54 @@ Reusable capabilities available to agents:
 
 Winner determined by composite score: `engagement_rate * 0.4 + reach * 0.3 + saves * 0.3`
 
+## Content approval workflow
+
+`pipeline/approval.py` — Review before publishing:
+- Submit generated content for manual review
+- Approve/reject via CLI or webhook API
+- Approved content auto-enqueued with priority 9
+- Quality scores displayed for reviewer decision
+
+## Batch processing
+
+`pipeline/batch.py` — Generate multiple content pieces:
+- Process entire queue in one pass
+- Configurable concurrency (sequential or parallel)
+- Aggregate results with success rate
+
+## Notifications
+
+`notifications.py` — Multi-channel alerting:
+- **Telegram** — Publish/fail alerts to Telegram bot
+- **Webhook** — POST to Slack/Discord/custom URL
+- **Log** — Always active as fallback
+- Auto-notifies on scheduler publish/fail events
+
+## Token management
+
+`utils/token_refresh.py` — Instagram token lifecycle:
+- Auto-detect expiry via Graph API probe
+- Refresh 7 days before expiration
+- Auto-update `.env` file with new token
+
 ## Webhook server
 
 `webhook.py` — HTTP API for monitoring and triggers:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/health` | GET | Health check |
-| `/status` | GET | Queue stats |
+| `/health` | GET | Health check + version |
+| `/status` | GET | Queue + circuit breakers + token status |
 | `/queue` | GET | View content queue |
 | `/calendar` | GET | View content calendar |
 | `/analytics` | GET | Analytics report |
+| `/trends` | GET | Current trending topics |
+| `/review` | GET | Content review queue |
 | `/webhook/instagram` | POST | Instagram insights callback |
 | `/trigger/generate` | POST | Trigger content generation |
+| `/trigger/trends` | POST | Auto-enqueue trending topics |
+| `/review/approve/:id` | POST | Approve content for publishing |
+| `/review/reject/:id` | POST | Reject content |
 
 ## Deployment (Docker)
 
@@ -207,11 +242,12 @@ Recycle score = base 5.0 + engagement boost + reach + saves
 ```
 instagram-generator/
 ├── CLAUDE.md              # This file
-├── main.py                # CLI entry point (16 commands)
+├── main.py                # CLI entry point (22 commands)
 ├── config.py              # Settings via .env
 ├── scheduler.py           # Auto-posting scheduler
-├── webhook.py             # HTTP webhook server
+├── webhook.py             # HTTP webhook server (12 endpoints)
 ├── accounts.py            # Multi-account management
+├── notifications.py       # Telegram/webhook/log notifications
 ├── Dockerfile             # Container image
 ├── docker-compose.yml     # Production deployment
 ├── agents/                # Multi-agent system
@@ -231,7 +267,9 @@ instagram-generator/
 ├── pipeline/              # Content generation pipeline
 │   ├── orchestrator.py    # End-to-end pipeline (with moderation + resilience)
 │   ├── queue.py           # Priority content queue
-│   └── ab_testing.py      # A/B testing engine
+│   ├── ab_testing.py      # A/B testing engine
+│   ├── approval.py        # Content review workflow
+│   └── batch.py           # Batch processing engine
 ├── skills/                # Reusable creative skills
 │   ├── visual.py          # Visual composition
 │   ├── copywriting.py     # Uzbek copywriting
@@ -254,14 +292,18 @@ instagram-generator/
 │   ├── test_queue.py      # Queue tests
 │   ├── test_rate_limiter.py
 │   ├── test_strategy.py   # Strategy engine tests
-│   └── test_trends.py     # Trends engine tests
+│   ├── test_trends.py     # Trends engine tests
+│   ├── test_pipeline.py   # Integration tests (mocked)
+│   ├── test_approval.py   # Approval workflow tests
+│   └── test_notifications.py  # Notification tests
 └── utils/                 # Utilities
     ├── cdn.py             # S3/R2/MinIO/HTTP upload
     ├── media.py           # ffmpeg operations
     ├── rate_limiter.py    # Token bucket rate limiting
     ├── circuit_breaker.py # Circuit breaker pattern
     ├── startup.py         # Environment validation
-    └── logging.py         # Structured logging (dev/prod)
+    ├── logging.py         # Structured logging (dev/prod)
+    └── token_refresh.py   # Instagram token auto-refresh
 ```
 
 ## Testing
@@ -284,7 +326,7 @@ python main.py doctor          # Check env, ffmpeg, API keys
 python main.py doctor --strict # Require all API keys
 ```
 
-## CLI commands (17 total)
+## CLI commands (22 total)
 
 ```bash
 # === Content Generation ===
@@ -330,6 +372,39 @@ python main.py history                                            # Post history
 python main.py templates                                          # List templates
 python main.py doctor                                             # Startup diagnostics
 python main.py doctor --strict                                    # Require all keys
+
+# === Batch Processing ===
+python main.py batch --from-queue -l 10                           # Process 10 queue items
+python main.py batch --from-queue -l 5 -c 2                       # 5 items, 2 parallel
+
+# === Content Review ===
+python main.py review                                             # View review queue
+python main.py review --pending                                   # Pending items only
+python main.py review --approve abc123 -n "Looks great"           # Approve item
+python main.py review --reject abc123 -n "Caption too short"      # Reject item
+
+# === Token Management ===
+python main.py token                                              # Token status
+python main.py token --check                                      # Verify + auto-refresh
+python main.py token --refresh                                    # Force refresh
+
+# === Notifications ===
+python main.py notify --test                                      # Send test notification
+python main.py notify -m "Custom message"                         # Send custom message
+```
+
+## Makefile
+
+```bash
+make help       # Show all commands
+make install    # Production deps
+make dev        # Dev deps (pytest, ruff, mypy)
+make check      # Lint + typecheck + test
+make test       # Run tests
+make test-cov   # Tests with coverage
+make docker     # Build image
+make docker-up  # Start production stack
+make clean      # Remove cache files
 ```
 
 ## Configuration
