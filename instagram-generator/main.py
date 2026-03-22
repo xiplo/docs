@@ -2,23 +2,23 @@
 """CLI entry point for the Instagram Content Generator.
 
 Usage:
-    # Generate and post a single piece of content
+    # AI-driven generation with agent system
+    python main.py auto-generate --category motivational --topic "Muvaffaqiyat"
+
+    # Generate from template (direct)
     python main.py generate --template morning_motivation
 
-    # Generate without posting (preview mode)
-    python main.py generate --template uzbek_plov --dry-run
+    # Plan weekly content calendar
+    python main.py strategy --plan-week
 
     # Start the automated scheduler
     python main.py schedule
 
-    # Start scheduler with custom times
-    python main.py schedule --times 10:00,14:00,19:00
+    # View analytics report
+    python main.py analytics
 
     # List available templates
     python main.py templates
-
-    # Show template details
-    python main.py templates --name morning_motivation
 """
 
 from __future__ import annotations
@@ -49,14 +49,126 @@ logger = structlog.get_logger(__name__)
 
 
 @click.group()
-@click.version_option(version="1.0.0")
+@click.version_option(version="2.0.0")
 def cli():
-    """Instagram Content Generator — Nano Banana + Kling 3.0 + Eleven Labs"""
+    """Instagram Content Generator — Multi-Agent Creative System
+
+    Nano Banana (images) + Kling 3.0 (video) + Eleven Labs (Uzbek TTS)
+    """
     pass
 
 
 # =====================================================================
-# generate command
+# auto-generate command (agent-driven)
+# =====================================================================
+
+
+@cli.command("auto-generate")
+@click.option("--category", "-c", required=True,
+              type=click.Choice([
+                  "motivational", "educational", "product", "travel",
+                  "recipe", "fashion", "tech", "lifestyle", "humor",
+              ]))
+@click.option("--topic", "-t", default=None, help="Content topic (auto-selected if omitted)")
+@click.option("--content-type", "-ct", default="reel",
+              type=click.Choice(["reel", "image", "carousel", "story"]))
+@click.option("--style", "-s", default="photorealistic",
+              type=click.Choice([
+                  "photorealistic", "cinematic", "illustration",
+                  "3d_render", "flat_design", "anime", "watercolor",
+              ]))
+@click.option("--duration", "-d", default="5", type=click.Choice(["5", "10"]))
+@click.option("--dry-run", is_flag=True, help="Preview without posting")
+def auto_generate(
+    category: str,
+    topic: str | None,
+    content_type: str,
+    style: str,
+    duration: str,
+    dry_run: bool,
+):
+    """Generate content using the multi-agent creative system."""
+    from agents.crew import CreativeCrew
+    from pipeline.orchestrator import ContentPipeline, ContentRequest
+    from strategy.engine import StrategyEngine
+
+    if not topic:
+        engine = StrategyEngine()
+        topic = engine.suggest_topic(category)
+        click.echo(f"  Auto-selected topic: {topic}")
+
+    async def _run():
+        # Phase 1: Agent crew produces a creative brief
+        click.echo(f"\n{'='*60}")
+        click.echo(f"  CREATIVE CREW — Agent Pipeline")
+        click.echo(f"{'='*60}")
+        click.echo(f"  Topic:    {topic}")
+        click.echo(f"  Category: {category}")
+        click.echo(f"  Type:     {content_type}")
+        click.echo(f"  Style:    {style}")
+        click.echo(f"  Duration: {duration}s")
+        click.echo(f"{'='*60}\n")
+
+        crew = CreativeCrew()
+        brief = await crew.produce(
+            topic=topic,
+            category=category,
+            content_type=content_type,
+            style_preset=style,
+            duration=duration,
+        )
+
+        # Display agent results
+        click.echo(f"\n  Agent Results:")
+        click.echo(f"  {'─'*50}")
+        click.echo(f"  Approved:      {brief.approved}")
+        click.echo(f"  Quality:       {brief.quality_scores}")
+        click.echo(f"  Mood:          {brief.mood}")
+        click.echo(f"  Lighting:      {brief.lighting_setup[:60]}...")
+        click.echo(f"  Colors:        {brief.color_palette[:3]}")
+        click.echo(f"  Hook:          {brief.hook_line}")
+        click.echo(f"  CTA:           {brief.cta}")
+        click.echo(f"  Hashtags:      {len(brief.hashtags)} tags")
+        click.echo(f"  Pacing:        {brief.pacing}")
+        click.echo(f"  Music mood:    {brief.music_mood}")
+        if brief.voiceover_text:
+            click.echo(f"  Voiceover:     {brief.voiceover_text[:60]}...")
+        click.echo(f"  Image prompt:  {brief.image_prompt[:80]}...")
+        click.echo(f"  {'─'*50}")
+
+        if dry_run:
+            click.echo("\n  [DRY RUN] Skipping generation and posting.")
+            click.echo(f"\n  Full caption:\n{brief.caption}")
+            return
+
+        if not brief.approved:
+            click.echo("\n  Content did not pass quality review.")
+            click.echo(f"  Revision notes: {brief.revision_notes}")
+            click.echo("  Publishing anyway (override)...")
+
+        # Phase 2: Generate and publish via pipeline
+        click.echo(f"\n  Generating and publishing...")
+        request_data = crew.brief_to_content_request(brief)
+        request = ContentRequest(**request_data)
+
+        pipeline = ContentPipeline()
+        try:
+            result = await pipeline.run(request)
+            click.echo(f"\n  Result:")
+            click.echo(f"  Status:    {result.status}")
+            click.echo(f"  Request:   {result.request_id}")
+            if result.media_id:
+                click.echo(f"  Media ID:  {result.media_id}")
+            if result.error:
+                click.echo(f"  Error:     {result.error}", err=True)
+        finally:
+            await pipeline.close()
+
+    asyncio.run(_run())
+
+
+# =====================================================================
+# generate command (template-based)
 # =====================================================================
 
 
@@ -250,6 +362,70 @@ def history(limit: int):
         click.echo(
             f"  {ts:<22} {r['template']:<25} {r['content_type']:<10} {r['status']}"
         )
+
+
+# =====================================================================
+# strategy command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--plan-week", is_flag=True, help="Plan a full week of content")
+@click.option("--plan-day", is_flag=True, help="Plan today's content")
+@click.option("--posts-per-day", "-p", default=3, help="Posts per day (1-5)")
+def strategy(plan_week: bool, plan_day: bool, posts_per_day: int):
+    """Content strategy planning and calendar management."""
+    from strategy.engine import StrategyEngine
+    from strategy.calendar import ContentCalendar
+
+    engine = StrategyEngine()
+    calendar = ContentCalendar()
+
+    if plan_week:
+        slots = engine.plan_week(posts_per_day)
+        calendar.set_slots(slots)
+        calendar.save()
+        click.echo(calendar.display())
+    elif plan_day:
+        slots = engine.plan_day(posts_per_day)
+        calendar.set_slots(slots)
+        click.echo(calendar.display())
+    else:
+        # Show existing calendar
+        calendar.load()
+        click.echo(calendar.display())
+
+        # Show next slot
+        next_slot = calendar.get_next_slot()
+        if next_slot:
+            click.echo(
+                f"\n  Next post: {next_slot.day} {next_slot.time} — "
+                f"{next_slot.category}/{next_slot.content_type}: {next_slot.topic}"
+            )
+
+
+# =====================================================================
+# analytics command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--report", "-r", is_flag=True, help="Full analytics report")
+@click.option("--suggest", "-s", is_flag=True, help="Get content suggestions")
+def analytics(report: bool, suggest: bool):
+    """View content performance analytics."""
+    from skills.analytics import AnalyticsSkills
+
+    if report or not suggest:
+        click.echo(AnalyticsSkills.generate_report())
+
+    if suggest:
+        suggestion = AnalyticsSkills.suggest_next_content()
+        click.echo(f"\n  Content Suggestion:")
+        click.echo(f"  {'─'*40}")
+        click.echo(f"  Category: {suggestion['recommended_category']}")
+        click.echo(f"  Type:     {suggestion['recommended_type']}")
+        click.echo(f"  Reason:   {suggestion['reasoning']}")
 
 
 if __name__ == "__main__":

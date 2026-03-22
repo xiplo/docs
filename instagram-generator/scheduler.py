@@ -1,7 +1,9 @@
 """Scheduler — automated content posting on a cron-like schedule.
 
-Reads the schedule from CONTENT_SCHEDULE or uses defaults.
-Selects templates in rotation, generates content, and posts to Instagram.
+Now powered by the multi-agent creative system:
+  1. Strategy Engine picks topic/category/type
+  2. Creative Crew (6 agents) produces a quality-reviewed brief
+  3. Content Pipeline generates media and publishes to Instagram
 """
 
 from __future__ import annotations
@@ -17,8 +19,10 @@ from zoneinfo import ZoneInfo
 
 import structlog
 
+from agents.crew import CreativeCrew
 from config import settings
 from pipeline.orchestrator import ContentPipeline, ContentRequest
+from strategy.engine import StrategyEngine
 from templates.prompts import TEMPLATES, ContentTemplate
 
 logger = structlog.get_logger(__name__)
@@ -79,27 +83,42 @@ class ContentScheduler:
             await self.pipeline.close()
 
     async def _execute_post(self, time_slot: str) -> None:
-        """Pick a template, generate content, and post."""
-        template = self._next_template()
+        """Use agent system to produce content, then publish."""
+        # Strategy engine picks what to post
+        engine = StrategyEngine()
+        day_slots = engine.plan_day(len(self.post_times))
+        slot_index = self.post_times.index(time_slot) if time_slot in self.post_times else 0
+        slot = day_slots[slot_index] if slot_index < len(day_slots) else day_slots[0]
+
         logger.info(
             "scheduler.posting",
-            template=template.name,
+            topic=slot.topic,
+            category=slot.category,
             time_slot=time_slot,
         )
 
-        request = ContentRequest(
-            content_type=template.content_type,
-            image_prompt=template.image_prompt,
-            caption=template.caption,
-            voiceover_text=template.voiceover_text,
-            image_style=template.image_style,
-            video_duration=template.video_duration,
-            subtitle_text=template.subtitle_text,
-            carousel_prompts=template.carousel_prompts,
-            hashtags=template.hashtags,
+        # Agent crew produces a creative brief
+        crew = CreativeCrew()
+        brief = await crew.produce(
+            topic=slot.topic,
+            category=slot.category,
+            content_type=slot.content_type,
+            style_preset=slot.style_preset,
+            duration=slot.duration,
         )
 
+        # Convert brief to pipeline request
+        request_data = crew.brief_to_content_request(brief)
+        request = ContentRequest(**request_data)
+
         result = await self.pipeline.run(request)
+
+        # Build a template-like object for history
+        template = type("Slot", (), {
+            "name": f"{slot.category}:{slot.topic[:30]}",
+            "content_type": slot.content_type,
+        })()
+
         self._save_history(template, result, time_slot)
 
         if result.status == "published":
