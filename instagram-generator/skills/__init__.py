@@ -14,6 +14,7 @@ from .copywriting import CopywritingSkills
 from .audience import AudienceSkills
 from .platform import PlatformSkills
 from .analytics import AnalyticsSkills
+from .moderation import ContentModerator
 
 __all__ = [
     "VisualSkills",
@@ -21,4 +22,5 @@ __all__ = [
     "AudienceSkills",
     "PlatformSkills",
     "AnalyticsSkills",
+    "ContentModerator",
 ]

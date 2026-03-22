@@ -573,5 +573,168 @@ def webhook(port: int):
     asyncio.run(start_webhook_server(port))
 
 
+# =====================================================================
+# trends command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--category", "-c", default=None, help="Filter by category")
+@click.option("--hashtags", is_flag=True, help="Show trending hashtags")
+@click.option("--plan", is_flag=True, help="Create content plan from trends")
+def trends(category: str | None, hashtags: bool, plan: bool):
+    """Show trending topics and seasonal content opportunities."""
+    from strategy.trends import TrendEngine
+
+    if hashtags:
+        tags = TrendEngine.get_trending_hashtags(category or "")
+        click.echo(f"\n  Trending hashtags:")
+        click.echo(f"  {' '.join('#' + t for t in tags[:25])}")
+        return
+
+    if plan:
+        from pipeline.queue import ContentQueue
+        trends_list = TrendEngine.get_current_trends(limit=5)
+        q = ContentQueue()
+        for trend in trends_list:
+            suggestion = TrendEngine.suggest_content_for_trend(trend)
+            q.enqueue(
+                topic=suggestion["topic"],
+                category=suggestion["category"],
+                content_type=suggestion["content_type"],
+                priority=suggestion["priority"],
+            )
+        click.echo(f"  Enqueued {len(trends_list)} trending topics to queue.")
+        click.echo(q.display())
+        return
+
+    click.echo(TrendEngine.display_trends())
+
+
+# =====================================================================
+# recycle command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--strategy", "-s", default="new_angle",
+              type=click.Choice(["reel_to_carousel", "reel_to_story", "image_to_reel", "new_angle"]))
+@click.option("--generate", is_flag=True, help="Generate recycled content")
+@click.option("--limit", "-l", default=5, help="Number of candidates")
+def recycle(strategy: str, generate: bool, limit: int):
+    """Find and repurpose top-performing content."""
+    from strategy.recycler import ContentRecycler
+
+    recycler = ContentRecycler()
+
+    if generate:
+        candidates = recycler.find_candidates(strategy=strategy, limit=1)
+        if not candidates:
+            click.echo("  No recyclable content found.")
+            return
+
+        candidate = candidates[0]
+        request = recycler.create_recycled_request(candidate)
+        click.echo(f"  Recycling: {candidate.topic}")
+        click.echo(f"  Strategy: {strategy} ({candidate.content_type} → {request.content_type})")
+        click.echo(f"  Original score: {candidate.score:.1f}/10")
+
+        from pipeline.queue import ContentQueue
+        q = ContentQueue()
+        q.enqueue(
+            topic=candidate.topic,
+            category=candidate.category,
+            content_type=request.content_type,
+            priority=8,
+        )
+        click.echo("  Added to queue with priority 8.")
+    else:
+        click.echo(recycler.get_recycle_report())
+
+
+# =====================================================================
+# accounts command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--add", "-a", is_flag=True, help="Add a new account")
+@click.option("--id", "account_id", default=None, help="Account ID")
+@click.option("--name", default=None, help="Account display name")
+@click.option("--deactivate", is_flag=True, help="Deactivate an account")
+def accounts(add: bool, account_id: str | None, name: str | None, deactivate: bool):
+    """Manage multiple Instagram accounts."""
+    from accounts import AccountManager, AccountConfig
+
+    manager = AccountManager()
+
+    if add and account_id and name:
+        config = AccountConfig(id=account_id, name=name)
+        try:
+            manager.add_account(config)
+            click.echo(f"  Account '{account_id}' ({name}) added.")
+        except ValueError as e:
+            click.echo(f"  Error: {e}", err=True)
+    elif deactivate and account_id:
+        if manager.deactivate_account(account_id):
+            click.echo(f"  Account '{account_id}' deactivated.")
+        else:
+            click.echo(f"  Account '{account_id}' not found.", err=True)
+    else:
+        click.echo(manager.display())
+
+
+# =====================================================================
+# moderate command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--text", "-t", required=True, help="Text to moderate")
+@click.option("--hashtags", "-h", default="", help="Comma-separated hashtags")
+def moderate(text: str, hashtags: str):
+    """Check content against moderation rules."""
+    from skills.moderation import ContentModerator
+
+    tags = [t.strip() for t in hashtags.split(",") if t.strip()] if hashtags else []
+    result = ContentModerator.check_content_request(text, tags)
+
+    click.echo(f"\n  Moderation: {result.summary}")
+    if result.flags:
+        click.echo(f"  Flags:")
+        for flag in result.flags:
+            click.echo(f"    - {flag}")
+    if result.suggestions:
+        click.echo(f"  Suggestions:")
+        for s in result.suggestions:
+            click.echo(f"    - {s}")
+
+
+# =====================================================================
+# status command
+# =====================================================================
+
+
+@cli.command()
+def status():
+    """Show system status — circuit breakers, rate limits, queue."""
+    from utils.circuit_breaker import CIRCUIT_BREAKERS
+    from utils.rate_limiter import RATE_LIMITERS
+
+    click.echo("\n  Circuit Breakers:")
+    for name, breaker in CIRCUIT_BREAKERS.items():
+        s = breaker.get_status()
+        click.echo(f"    {name:<15} {s['state']:<10} failures={s['failures']}")
+
+    click.echo(f"\n  Rate Limiters:")
+    for name, limiter in RATE_LIMITERS.items():
+        click.echo(f"    {name:<15} {limiter.rate:.2f} req/s  burst={limiter.capacity}")
+
+    from pipeline.queue import ContentQueue
+    q = ContentQueue()
+    stats = q.get_stats()
+    click.echo(f"\n  Queue: {', '.join(f'{k}={v}' for k, v in stats.items())}")
+
+
 if __name__ == "__main__":
     cli()

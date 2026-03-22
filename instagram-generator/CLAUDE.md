@@ -151,15 +151,67 @@ docker compose run --rm generate auto-generate -c motivational -t "Muvaffaqiyat"
 docker compose logs -f scheduler
 ```
 
+## Content moderation
+
+`skills/moderation.py` — Pre-publish safety checks:
+- Blocked content detection (scams, adult, drugs)
+- Instagram engagement-bait pattern detection
+- Uzbek cultural sensitivity (religion, politics, ethnicity — flagged for review)
+- Positive cultural markers boost (oila, mehnat, hurmat, an'ana)
+- Caption length + emoji density validation
+- Pipeline auto-blocks content scoring below 70% safety
+
+## Resilience layer
+
+`utils/rate_limiter.py` — Token bucket per API provider:
+- NanoBanana: 0.5 req/s, burst 5
+- Kling: 0.17 req/s, burst 3
+- ElevenLabs: 0.33 req/s, burst 4
+- Instagram: 3.3 req/s, burst 10
+
+`utils/circuit_breaker.py` — Prevents cascading failures:
+- States: CLOSED → OPEN → HALF_OPEN → CLOSED
+- Opens after 3-5 failures, recovers after 60-300s
+- Half-open allows 2 test calls before closing
+
+## Content recycling
+
+`strategy/recycler.py` — Repurpose top performers:
+
+| Strategy | Source → Target | Min age |
+|----------|----------------|---------|
+| `reel_to_carousel` | Reel → Carousel | 14 days |
+| `reel_to_story` | Reel → Story | 7 days |
+| `image_to_reel` | Image → Reel | 21 days |
+| `new_angle` | Any → Same | 30 days |
+
+Recycle score = base 5.0 + engagement boost + reach + saves
+
+## Trending topics
+
+`strategy/trends.py` — Seasonal & calendar-driven content:
+- 13 Uzbek calendar events (Navro'z, Mustaqillik, Hayit, etc.)
+- Monthly evergreen trends (12 months fully mapped)
+- Trending hashtag aggregation
+- Auto-enqueue trending topics to content queue
+
+## Multi-account support
+
+`accounts.py` — Manage multiple Instagram business accounts:
+- Per-account brand voice, categories, posting schedule
+- Per-account visual identity and CDN folder
+- Activate/deactivate accounts
+
 ## Directory structure
 
 ```
 instagram-generator/
 ├── CLAUDE.md              # This file
-├── main.py                # CLI entry point (10 commands)
+├── main.py                # CLI entry point (16 commands)
 ├── config.py              # Settings via .env
 ├── scheduler.py           # Auto-posting scheduler
 ├── webhook.py             # HTTP webhook server
+├── accounts.py            # Multi-account management
 ├── Dockerfile             # Container image
 ├── docker-compose.yml     # Production deployment
 ├── agents/                # Multi-agent system
@@ -177,7 +229,7 @@ instagram-generator/
 │   ├── elevenlabs.py      # Uzbek TTS
 │   └── instagram.py       # Instagram Graph API
 ├── pipeline/              # Content generation pipeline
-│   ├── orchestrator.py    # End-to-end pipeline
+│   ├── orchestrator.py    # End-to-end pipeline (with moderation + resilience)
 │   ├── queue.py           # Priority content queue
 │   └── ab_testing.py      # A/B testing engine
 ├── skills/                # Reusable creative skills
@@ -185,18 +237,23 @@ instagram-generator/
 │   ├── copywriting.py     # Uzbek copywriting
 │   ├── audience.py        # Audience targeting
 │   ├── platform.py        # Instagram optimization
-│   └── analytics.py       # Performance analytics
+│   ├── analytics.py       # Performance analytics
+│   └── moderation.py      # Content safety & cultural checks
 ├── strategy/              # Content strategy
 │   ├── engine.py          # Strategy planner
-│   └── calendar.py        # Content calendar
+│   ├── calendar.py        # Content calendar
+│   ├── recycler.py        # Content recycling engine
+│   └── trends.py          # Trending topics & seasonal events
 ├── templates/             # Content templates
 │   └── prompts.py         # Template library
 └── utils/                 # Utilities
     ├── cdn.py             # S3/R2/MinIO/HTTP upload
-    └── media.py           # ffmpeg operations
+    ├── media.py           # ffmpeg operations
+    ├── rate_limiter.py    # Token bucket rate limiting
+    └── circuit_breaker.py # Circuit breaker pattern
 ```
 
-## CLI commands (10 total)
+## CLI commands (16 total)
 
 ```bash
 # === Content Generation ===
@@ -206,6 +263,11 @@ python main.py generate --template morning_motivation             # Template-bas
 # === Strategy & Planning ===
 python main.py strategy --plan-week                               # Plan weekly calendar
 python main.py strategy --plan-day                                # Plan today
+python main.py trends                                             # Show trending topics
+python main.py trends --plan                                      # Auto-enqueue trends
+python main.py trends --hashtags                                  # Trending hashtags
+python main.py recycle                                            # Find recyclable content
+python main.py recycle -s new_angle --generate                    # Generate recycled content
 
 # === Queue Management ===
 python main.py queue                                              # View queue
@@ -217,10 +279,18 @@ python main.py queue --process                                    # Process next
 python main.py ab-test -t "Muvaffaqiyat" -c motivational -s visual_style
 python main.py ab-test -t "Palov" -c recipe -s duration --dry-run
 
+# === Safety & Moderation ===
+python main.py moderate -t "Your caption text" -h "tag1,tag2"     # Check content safety
+python main.py status                                             # Circuit breakers + rate limits
+
 # === Automation ===
 python main.py schedule                                           # Start auto-poster
 python main.py schedule --times 10:00,14:00,19:00                 # Custom times
 python main.py webhook --port 8080                                # Start webhook server
+
+# === Account Management ===
+python main.py accounts                                           # List accounts
+python main.py accounts --add --id brand1 --name "My Brand"       # Add account
 
 # === Monitoring ===
 python main.py analytics --report                                 # Performance report

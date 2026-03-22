@@ -27,8 +27,11 @@ import structlog
 
 from clients import ElevenLabsClient, InstagramClient, KlingClient, NanoBananaClient
 from config import settings
+from skills.moderation import ContentModerator
 from utils.cdn import upload_to_cdn
+from utils.circuit_breaker import get_breaker
 from utils.media import add_text_overlay, merge_audio_video
+from utils.rate_limiter import get_limiter
 
 logger = structlog.get_logger(__name__)
 
@@ -87,6 +90,23 @@ class ContentPipeline:
         )
 
         try:
+            # Pre-publish moderation check
+            moderation = ContentModerator.check_content_request(
+                caption=request.caption,
+                hashtags=request.hashtags,
+                voiceover=request.voiceover_text,
+            )
+            if not moderation.passed:
+                logger.warning(
+                    "pipeline.moderation_blocked",
+                    request_id=request_id,
+                    score=moderation.score,
+                    flags=moderation.flags,
+                )
+                result.status = "blocked"
+                result.error = f"Content moderation failed: {', '.join(moderation.flags)}"
+                return result
+
             if request.content_type == "reel":
                 await self._produce_reel(request, run_dir, result)
             elif request.content_type == "story":
@@ -116,8 +136,10 @@ class ContentPipeline:
     ) -> None:
         logger.info("pipeline.reel.start", prompt=req.image_prompt[:60])
 
-        # 1. Generate base image
-        image_bytes = await self.nano_banana.generate_image(
+        # 1. Generate base image (rate-limited + circuit-breaker)
+        await get_limiter("nano_banana").acquire()
+        image_bytes = await get_breaker("nano_banana").call(
+            self.nano_banana.generate_image,
             req.image_prompt,
             style=req.image_style,
             aspect_ratio="story",  # 9:16
@@ -130,7 +152,9 @@ class ContentPipeline:
         image_cdn_url = await upload_to_cdn(image_path)
 
         # 3. Animate image → video via Kling 3.0
-        video_bytes = await self.kling.image_to_video(
+        await get_limiter("kling").acquire()
+        video_bytes = await get_breaker("kling").call(
+            self.kling.image_to_video,
             image_url=image_cdn_url,
             prompt=req.image_prompt,
             duration=req.video_duration,
@@ -141,7 +165,10 @@ class ContentPipeline:
         # 4. Generate Uzbek voiceover
         final_video_path = raw_video_path
         if req.voiceover_text:
-            audio_bytes = await self.elevenlabs.synthesize(req.voiceover_text)
+            await get_limiter("elevenlabs").acquire()
+            audio_bytes = await get_breaker("elevenlabs").call(
+                self.elevenlabs.synthesize, req.voiceover_text
+            )
             audio_path = run_dir / "voiceover.mp3"
             await self.elevenlabs.save_audio(audio_bytes, audio_path)
             result.local_paths.append(str(audio_path))
@@ -167,7 +194,9 @@ class ContentPipeline:
         full_caption = self._build_caption(req.caption, req.hashtags)
 
         # 9. Publish Reel to Instagram
-        media_id = await self.instagram.post_reel(
+        await get_limiter("instagram").acquire()
+        media_id = await get_breaker("instagram").call(
+            self.instagram.post_reel,
             video_url=video_cdn_url,
             caption=full_caption,
         )
