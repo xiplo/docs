@@ -102,14 +102,66 @@ Reusable capabilities available to agents:
 | Saturday | Style Saturday | fashion, lifestyle, product |
 | Sunday | Story Sunday | travel, motivational, lifestyle |
 
+## Content queue
+
+`pipeline/queue.py` — Priority-based publication queue:
+- Persistent JSON storage (survives restarts)
+- Priority 1-10 (higher = published first)
+- Deduplication by topic
+- Auto-retry on failure (max 3 attempts, priority degrades)
+- Bulk enqueue from calendar slots
+
+## A/B testing
+
+`pipeline/ab_testing.py` — Multi-variant content experiments:
+
+| Strategy | What varies | Use case |
+|----------|-------------|----------|
+| `visual_style` | Photorealistic vs Cinematic vs Illustration | Find best visual approach |
+| `hook_style` | Question vs Statement vs Number | Find best hook format |
+| `pacing` | Cinematic slow vs Dynamic fast | Find best video rhythm |
+| `duration` | 5s vs 10s | Find optimal video length |
+
+Winner determined by composite score: `engagement_rate * 0.4 + reach * 0.3 + saves * 0.3`
+
+## Webhook server
+
+`webhook.py` — HTTP API for monitoring and triggers:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/status` | GET | Queue stats |
+| `/queue` | GET | View content queue |
+| `/calendar` | GET | View content calendar |
+| `/analytics` | GET | Analytics report |
+| `/webhook/instagram` | POST | Instagram insights callback |
+| `/trigger/generate` | POST | Trigger content generation |
+
+## Deployment (Docker)
+
+```bash
+# Start scheduler + webhook (production)
+docker compose up -d scheduler webhook
+
+# One-shot generation
+docker compose run --rm generate auto-generate -c motivational -t "Muvaffaqiyat"
+
+# View logs
+docker compose logs -f scheduler
+```
+
 ## Directory structure
 
 ```
 instagram-generator/
 ├── CLAUDE.md              # This file
-├── main.py                # CLI entry point
+├── main.py                # CLI entry point (10 commands)
 ├── config.py              # Settings via .env
 ├── scheduler.py           # Auto-posting scheduler
+├── webhook.py             # HTTP webhook server
+├── Dockerfile             # Container image
+├── docker-compose.yml     # Production deployment
 ├── agents/                # Multi-agent system
 │   ├── base.py            # Base classes, CreativeBrief
 │   ├── crew.py            # CreativeCrew orchestrator
@@ -125,7 +177,9 @@ instagram-generator/
 │   ├── elevenlabs.py      # Uzbek TTS
 │   └── instagram.py       # Instagram Graph API
 ├── pipeline/              # Content generation pipeline
-│   └── orchestrator.py    # End-to-end pipeline
+│   ├── orchestrator.py    # End-to-end pipeline
+│   ├── queue.py           # Priority content queue
+│   └── ab_testing.py      # A/B testing engine
 ├── skills/                # Reusable creative skills
 │   ├── visual.py          # Visual composition
 │   ├── copywriting.py     # Uzbek copywriting
@@ -138,41 +192,65 @@ instagram-generator/
 ├── templates/             # Content templates
 │   └── prompts.py         # Template library
 └── utils/                 # Utilities
-    ├── cdn.py             # CDN upload
+    ├── cdn.py             # S3/R2/MinIO/HTTP upload
     └── media.py           # ffmpeg operations
 ```
 
-## Key commands
+## CLI commands (10 total)
 
 ```bash
-# Generate content with agent system
-python main.py auto-generate --category motivational --topic "Muvaffaqiyat sirlari"
+# === Content Generation ===
+python main.py auto-generate -c motivational -t "Muvaffaqiyat"   # Agent-driven
+python main.py generate --template morning_motivation             # Template-based
 
-# Generate from template (legacy)
-python main.py generate --template morning_motivation
+# === Strategy & Planning ===
+python main.py strategy --plan-week                               # Plan weekly calendar
+python main.py strategy --plan-day                                # Plan today
 
-# Plan and display weekly calendar
-python main.py strategy --plan-week
+# === Queue Management ===
+python main.py queue                                              # View queue
+python main.py queue --add -t "Palov" -c recipe                   # Add to queue
+python main.py queue --from-calendar                              # Bulk enqueue from calendar
+python main.py queue --process                                    # Process next item
 
-# Start auto-posting scheduler
-python main.py schedule
+# === A/B Testing ===
+python main.py ab-test -t "Muvaffaqiyat" -c motivational -s visual_style
+python main.py ab-test -t "Palov" -c recipe -s duration --dry-run
 
-# View analytics
-python main.py analytics
+# === Automation ===
+python main.py schedule                                           # Start auto-poster
+python main.py schedule --times 10:00,14:00,19:00                 # Custom times
+python main.py webhook --port 8080                                # Start webhook server
 
-# List templates
-python main.py templates
+# === Monitoring ===
+python main.py analytics --report                                 # Performance report
+python main.py analytics --suggest                                # AI suggestions
+python main.py history                                            # Post history
+python main.py templates                                          # List templates
 ```
 
 ## Configuration
 
 All settings via environment variables (`.env` file):
-- `NANO_BANANA_API_KEY` — Image generation API
-- `KLING_API_KEY` — Video generation API
+
+**API keys:**
+- `NANO_BANANA_API_KEY` — Image generation
+- `KLING_API_KEY` — Video generation (Kling 3.0)
 - `ELEVENLABS_API_KEY` + `ELEVENLABS_VOICE_ID` — Uzbek TTS
-- `INSTAGRAM_ACCESS_TOKEN` + `INSTAGRAM_BUSINESS_ACCOUNT_ID` — Instagram
-- `CDN_UPLOAD_URL` + `CDN_PUBLIC_URL` — Media hosting
+- `INSTAGRAM_ACCESS_TOKEN` + `INSTAGRAM_BUSINESS_ACCOUNT_ID` — Instagram Graph API
+
+**CDN (S3-compatible):**
+- `CDN_PROVIDER` — `s3`, `r2`, `minio`, or `http`
+- `CDN_BUCKET_NAME`, `CDN_REGION`, `CDN_ENDPOINT_URL`, `CDN_PUBLIC_URL`
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+
+**Queue & A/B:**
+- `QUEUE_ENABLED`, `QUEUE_MAX_SIZE`
+- `AB_TESTING_ENABLED`, `AB_VARIANT_COUNT`
+
+**General:**
 - `TIMEZONE` — Default: `Asia/Tashkent`
+- `WEBHOOK_PORT`, `WEBHOOK_SECRET`
 
 ## Content types supported
 - **Reel** — Image → Video → Voiceover → Merge → Subtitles → Publish

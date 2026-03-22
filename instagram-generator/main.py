@@ -428,5 +428,150 @@ def analytics(report: bool, suggest: bool):
         click.echo(f"  Reason:   {suggestion['reasoning']}")
 
 
+# =====================================================================
+# queue command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--add", "-a", is_flag=True, help="Add item to queue")
+@click.option("--topic", "-t", default=None, help="Content topic")
+@click.option("--category", "-c", default=None, help="Content category")
+@click.option("--content-type", "-ct", default="reel")
+@click.option("--priority", "-p", default=5, type=int, help="Priority 1-10")
+@click.option("--from-calendar", is_flag=True, help="Enqueue from weekly calendar")
+@click.option("--process", is_flag=True, help="Process next item in queue")
+def queue(
+    add: bool,
+    topic: str | None,
+    category: str | None,
+    content_type: str,
+    priority: int,
+    from_calendar: bool,
+    process: bool,
+):
+    """Manage the content publication queue."""
+    from pipeline.queue import ContentQueue
+
+    q = ContentQueue()
+
+    if add and topic and category:
+        item = q.enqueue(topic, category, content_type, priority=priority)
+        click.echo(f"  Queued: {item.id} — {topic} [{category}] P{priority}")
+
+    elif from_calendar:
+        from strategy.engine import StrategyEngine
+        engine = StrategyEngine()
+        slots = engine.plan_week()
+        items = q.enqueue_from_calendar(slots)
+        click.echo(f"  Enqueued {len(items)} items from weekly calendar.")
+
+    elif process:
+        item = q.dequeue()
+        if not item:
+            click.echo("  Queue is empty or no items ready.")
+            return
+
+        click.echo(f"  Processing: {item.id} — {item.topic}")
+
+        async def _process():
+            from agents.crew import CreativeCrew
+            from pipeline.orchestrator import ContentPipeline, ContentRequest
+
+            crew = CreativeCrew()
+            brief = await crew.produce(
+                topic=item.topic,
+                category=item.category,
+                content_type=item.content_type,
+                style_preset=item.style_preset,
+                duration=item.duration,
+            )
+            request = ContentRequest(**crew.brief_to_content_request(brief))
+            pipeline = ContentPipeline()
+            try:
+                result = await pipeline.run(request)
+                if result.status == "published":
+                    q.mark_published(item.id, result.media_id)
+                    click.echo(f"  Published! Media ID: {result.media_id}")
+                else:
+                    q.mark_failed(item.id, result.error)
+                    click.echo(f"  Failed: {result.error}", err=True)
+            finally:
+                await pipeline.close()
+
+        asyncio.run(_process())
+    else:
+        click.echo(q.display())
+
+
+# =====================================================================
+# ab-test command
+# =====================================================================
+
+
+@cli.command("ab-test")
+@click.option("--topic", "-t", required=True, help="Content topic")
+@click.option("--category", "-c", required=True, help="Content category")
+@click.option("--strategy", "-s", default="visual_style",
+              type=click.Choice(["visual_style", "hook_style", "pacing", "duration"]))
+@click.option("--variants", "-v", default=2, type=int, help="Number of variants (2-3)")
+@click.option("--dry-run", is_flag=True, help="Preview without generating")
+def ab_test(topic: str, category: str, strategy: str, variants: int, dry_run: bool):
+    """Create an A/B test experiment with multiple content variants."""
+    from pipeline.ab_testing import ABTestingEngine, VARIATION_STRATEGIES
+
+    if dry_run:
+        strat = VARIATION_STRATEGIES.get(strategy, {})
+        click.echo(f"\n  A/B Test Preview:")
+        click.echo(f"  Strategy: {strategy} — {strat.get('description', '')}")
+        click.echo(f"  Topic: {topic}")
+        click.echo(f"  Variants: {variants}")
+        for i, var in enumerate(strat.get("variations", [])[:variants]):
+            click.echo(f"    Variant {i+1}: {var.get('name', '?')}")
+        return
+
+    async def _run():
+        engine = ABTestingEngine()
+        exp = await engine.create_experiment(
+            topic=topic,
+            category=category,
+            strategy=strategy,
+            variant_count=variants,
+        )
+        click.echo(f"\n  Experiment created: {exp.id}")
+        click.echo(f"  Variants: {len(exp.variants)}")
+        for v in exp.variants:
+            click.echo(f"    {v.name} ({v.id})")
+        click.echo(f"\n  Publish variants and track with:")
+        click.echo(f"    Metrics will be collected via webhook.")
+
+    asyncio.run(_run())
+
+
+# =====================================================================
+# webhook command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--port", "-p", default=8080, help="Webhook server port")
+def webhook(port: int):
+    """Start the webhook server for Instagram insights and triggers."""
+    from webhook import start_webhook_server
+
+    click.echo(f"Starting webhook server on port {port}...")
+    click.echo(f"  Endpoints:")
+    click.echo(f"    GET  /health            — Health check")
+    click.echo(f"    GET  /status            — Queue & scheduler status")
+    click.echo(f"    GET  /queue             — View content queue")
+    click.echo(f"    GET  /calendar          — View content calendar")
+    click.echo(f"    GET  /analytics         — Analytics report")
+    click.echo(f"    POST /webhook/instagram — Instagram webhook")
+    click.echo(f"    POST /trigger/generate  — Trigger content generation")
+    click.echo(f"  Press Ctrl+C to stop.\n")
+
+    asyncio.run(start_webhook_server(port))
+
+
 if __name__ == "__main__":
     cli()

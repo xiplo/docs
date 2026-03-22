@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+  # Main scheduler — runs 24/7, auto-posts at configured times
+  scheduler:
+    build: .
+    command: schedule
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - output_data:/app/output
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Webhook server — receives Instagram insights callbacks
+  webhook:
+    build: .
+    command: webhook --port 8080
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - output_data:/app/output
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # One-shot content generation (use with docker compose run)
+  # Example: docker compose run --rm generate auto-generate -c motivational -t "Muvaffaqiyat"
+  generate:
+    build: .
+    env_file: .env
+    volumes:
+      - output_data:/app/output
+    profiles:
+      - tools
+
+volumes:
+  output_data:
+    driver: local

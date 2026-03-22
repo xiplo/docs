@@ -10,9 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-import random
 import signal
-import sys
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -23,7 +21,6 @@ from agents.crew import CreativeCrew
 from config import settings
 from pipeline.orchestrator import ContentPipeline, ContentRequest
 from strategy.engine import StrategyEngine
-from templates.prompts import TEMPLATES, ContentTemplate
 
 logger = structlog.get_logger(__name__)
 
@@ -133,16 +130,6 @@ class ContentScheduler:
                 template=template.name,
                 error=result.error,
             )
-
-    def _next_template(self) -> ContentTemplate:
-        """Rotate through templates, with some randomization."""
-        # 70% rotation, 30% random pick for variety
-        if random.random() < 0.3:
-            return random.choice(TEMPLATES)
-
-        template = TEMPLATES[self._template_index % len(TEMPLATES)]
-        self._template_index += 1
-        return template
 
     def _save_history(self, template, result, time_slot: str) -> None:
         """Append post result to history JSON file."""
