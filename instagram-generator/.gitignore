@@ -11,3 +11,15 @@ output/
 venv/
 dist/
 *.egg-info/
+.DS_Store
+.vscode/
+.idea/
+*.log
+*.db
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+secrets/
+credentials/

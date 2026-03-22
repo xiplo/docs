@@ -32,18 +32,10 @@ import click
 import structlog
 
 from config import settings
+from utils.logging import setup_logging
 
-# Configure structured logging
-structlog.configure(
-    processors=[
-        structlog.stdlib.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.dev.ConsoleRenderer(colors=True),
-    ],
-    wrapper_class=structlog.stdlib.BoundLogger,
-    context_class=dict,
-    logger_factory=structlog.PrintLoggerFactory(),
-)
+# Configure structured logging (auto-detects JSON mode via LOG_FORMAT env)
+setup_logging(log_level=settings.log_level)
 
 logger = structlog.get_logger(__name__)
 
@@ -56,6 +48,24 @@ def cli():
     Nano Banana (images) + Kling 3.0 (video) + Eleven Labs (Uzbek TTS)
     """
     pass
+
+
+# =====================================================================
+# doctor command (startup diagnostics)
+# =====================================================================
+
+
+@cli.command()
+@click.option("--strict", is_flag=True, help="Require all API keys")
+def doctor(strict: bool):
+    """Run startup diagnostics and validate environment."""
+    from utils.startup import validate_environment
+
+    report = validate_environment(require_all=strict)
+    click.echo(report.display())
+
+    if not report.passed:
+        sys.exit(1)
 
 
 # =====================================================================

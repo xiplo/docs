@@ -246,14 +246,45 @@ instagram-generator/
 │   └── trends.py          # Trending topics & seasonal events
 ├── templates/             # Content templates
 │   └── prompts.py         # Template library
+├── tests/                 # Test suite (pytest)
+│   ├── conftest.py        # Fixtures + mocked clients
+│   ├── test_agents.py     # Agent system tests
+│   ├── test_circuit_breaker.py
+│   ├── test_moderation.py # Moderation tests
+│   ├── test_queue.py      # Queue tests
+│   ├── test_rate_limiter.py
+│   ├── test_strategy.py   # Strategy engine tests
+│   └── test_trends.py     # Trends engine tests
 └── utils/                 # Utilities
     ├── cdn.py             # S3/R2/MinIO/HTTP upload
     ├── media.py           # ffmpeg operations
     ├── rate_limiter.py    # Token bucket rate limiting
-    └── circuit_breaker.py # Circuit breaker pattern
+    ├── circuit_breaker.py # Circuit breaker pattern
+    ├── startup.py         # Environment validation
+    └── logging.py         # Structured logging (dev/prod)
 ```
 
-## CLI commands (16 total)
+## Testing
+
+```bash
+pip install -r requirements-dev.txt
+pytest -v                                    # All tests
+pytest --cov=. --cov-report=term-missing     # Coverage
+pytest -m "not integration"                  # Skip API tests
+```
+
+## CI/CD
+
+`.github/workflows/ci.yml` — lint (ruff) → typecheck (mypy) → test (pytest, 40% min coverage) → docker build
+
+## Startup diagnostics
+
+```bash
+python main.py doctor          # Check env, ffmpeg, API keys
+python main.py doctor --strict # Require all API keys
+```
+
+## CLI commands (17 total)
 
 ```bash
 # === Content Generation ===
@@ -297,6 +328,8 @@ python main.py analytics --report                                 # Performance 
 python main.py analytics --suggest                                # AI suggestions
 python main.py history                                            # Post history
 python main.py templates                                          # List templates
+python main.py doctor                                             # Startup diagnostics
+python main.py doctor --strict                                    # Require all keys
 ```
 
 ## Configuration
