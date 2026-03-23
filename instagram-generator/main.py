@@ -1422,5 +1422,130 @@ def import_data(archive_path, merge):
             click.echo(f"    ! {err}")
 
 
+# =====================================================================
+# dedup command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--topic", "-t", default="", help="Check topic for duplicates")
+@click.option("--similar", "-s", default="", help="Find similar content")
+def dedup(topic, similar):
+    """Check content for duplicates before publishing."""
+    from skills.deduplication import DuplicateDetector
+
+    if similar:
+        results = DuplicateDetector.find_similar(similar)
+        if results:
+            for r in results:
+                click.echo(f"  {r['similarity']:.0%}  {r['topic'][:50]}  ({r['posted']})")
+        else:
+            click.echo("  No similar content found.")
+    elif topic:
+        is_dup, reason = DuplicateDetector.is_duplicate(topic)
+        if is_dup:
+            click.echo(f"  DUPLICATE: {reason}")
+        else:
+            click.echo("  No duplicates found.")
+    else:
+        click.echo(DuplicateDetector.display())
+
+
+# =====================================================================
+# competitors command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--add", is_flag=True, help="Add a competitor")
+@click.option("--name", default="", help="Competitor name")
+@click.option("--platform", "-p", default="instagram", help="Platform")
+@click.option("--handle", default="", help="Handle (@username)")
+@click.option("--update", default="", help="Update metrics (competitor ID)")
+@click.option("--followers", default=0, help="Follower count")
+@click.option("--avg-likes", default=0, help="Average likes")
+def competitors(add, name, platform, handle, update, followers, avg_likes):
+    """Track competitor accounts."""
+    from strategy.competitors import CompetitorTracker
+
+    tracker = CompetitorTracker()
+
+    if add:
+        comp = tracker.add(name=name, platform=platform, handle=handle)
+        click.echo(f"  Added: {comp.id} — {comp.name} ({comp.platform})")
+    elif update:
+        tracker.update_metrics(update, followers=followers, avg_likes=avg_likes)
+        click.echo(f"  Updated: {update}")
+    else:
+        click.echo(tracker.display())
+
+
+# =====================================================================
+# versions command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--content-id", default="", help="Content ID to view versions")
+@click.option("--diff", "diff_versions", default="", help="Compare versions (e.g., 1:2)")
+def versions(content_id, diff_versions):
+    """View content version history."""
+    from cms.versioning import VersionManager
+    import json as _json
+
+    vm = VersionManager()
+
+    if diff_versions and content_id:
+        parts = diff_versions.split(":")
+        if len(parts) == 2:
+            changes = vm.diff(content_id, int(parts[0]), int(parts[1]))
+            click.echo(f"\n  Diff v{parts[0]} → v{parts[1]}:")
+            for field_name, change in changes.items():
+                click.echo(f"    {field_name}: {change['from']} → {change['to']}")
+    else:
+        click.echo(vm.display(content_id))
+
+
+# =====================================================================
+# health command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--check", is_flag=True, help="Run health checks now")
+@click.option("--critical", is_flag=True, help="Check only critical APIs")
+def health(check, critical):
+    """Monitor API provider health."""
+    from utils.health import HealthMonitor
+
+    if check or critical:
+        async def _check():
+            if critical:
+                results = await HealthMonitor.check_critical()
+            else:
+                results = await HealthMonitor.check_all()
+            click.echo(HealthMonitor.display(results))
+
+        asyncio.run(_check())
+    else:
+        click.echo(HealthMonitor.display())
+
+
+# =====================================================================
+# ical command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--output", "-o", default="", help="Output .ics file path")
+@click.option("--source", default="all", help="Source: cms, calendar, all")
+def ical(output, source):
+    """Export content schedule as iCal feed."""
+    from utils.ical import CalendarFeed
+
+    path = CalendarFeed.export_file(output, source)
+    click.echo(f"  iCal exported: {path}")
+
+
 if __name__ == "__main__":
     cli()

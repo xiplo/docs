@@ -360,7 +360,7 @@ Rules-based content dispatch:
 - Category performance breakdown
 - Top performer identification
 
-## Social Media Clients (10 total)
+## Social Media Clients (12 total)
 
 | Client | File | API |
 |--------|------|-----|
@@ -374,6 +374,8 @@ Rules-based content dispatch:
 | **Facebook** | `clients/facebook.py` | Graph API (text, photo, video, reel) |
 | **Telegram** | `clients/telegram_channel.py` | Bot API (message, photo, video, album) |
 | **LinkedIn** | `clients/linkedin.py` | Marketing API (text, image, article) |
+| **Pinterest** | `clients/pinterest.py` | API v5 (pin, video pin, boards) |
+| **Threads** | `clients/threads.py` | Threads API (text, image, video, carousel) |
 
 ## Deployment (Docker)
 
@@ -444,7 +446,7 @@ Recycle score = base 5.0 + engagement boost + reach + saves
 ```
 instagram-generator/
 ├── CLAUDE.md              # This file
-├── main.py                # CLI entry point (39 commands)
+├── main.py                # CLI entry point (44 commands)
 ├── config.py              # Settings via .env
 ├── scheduler.py           # Auto-posting scheduler
 ├── Makefile               # Build/dev/deploy shortcuts
@@ -468,8 +470,9 @@ instagram-generator/
 │   ├── publisher.py       # Rules-based routing engine
 │   ├── asset_library.py   # Media asset library with tagging
 │   ├── campaigns.py       # Campaign management
-│   └── analytics_aggregator.py  # Cross-platform analytics
-├── clients/               # Social media & API clients (10)
+│   ├── analytics_aggregator.py  # Cross-platform analytics
+│   └── versioning.py      # Content version history
+├── clients/               # Social media & API clients (12)
 │   ├── nano_banana.py     # Image generation
 │   ├── kling.py           # Video generation (Kling 3.0)
 │   ├── elevenlabs.py      # Uzbek TTS
@@ -479,7 +482,9 @@ instagram-generator/
 │   ├── youtube.py         # YouTube Data API (Shorts)
 │   ├── facebook.py        # Facebook Pages Graph API
 │   ├── telegram_channel.py# Telegram Bot API (channels)
-│   └── linkedin.py        # LinkedIn Marketing API
+│   ├── linkedin.py        # LinkedIn Marketing API
+│   ├── pinterest.py       # Pinterest API v5
+│   └── threads.py         # Threads API (Meta)
 ├── pipeline/              # Content generation pipeline
 │   ├── orchestrator.py    # End-to-end pipeline (with moderation + resilience)
 │   ├── queue.py           # Priority content queue
@@ -494,13 +499,15 @@ instagram-generator/
 │   ├── analytics.py       # Performance analytics
 │   ├── moderation.py      # Content safety & cultural checks
 │   ├── hashtags.py        # Hashtag research & banned detection
-│   └── localization.py    # Multi-language captions (uz, ru, en)
+│   ├── localization.py    # Multi-language captions (uz, ru, en)
+│   └── deduplication.py   # Content duplicate detection
 ├── strategy/              # Content strategy
 │   ├── engine.py          # Strategy planner
 │   ├── calendar.py        # Content calendar
 │   ├── recycler.py        # Content recycling engine
 │   ├── trends.py          # Trending topics & seasonal events
-│   └── optimizer.py       # Best-time-to-post per platform
+│   ├── optimizer.py       # Best-time-to-post per platform
+│   └── competitors.py    # Competitor account tracking
 ├── plugins/               # Extension system
 │   ├── __init__.py        # Plugin registry + hook system
 │   └── example_logger.py  # Example plugin (logging hooks)
@@ -529,7 +536,9 @@ instagram-generator/
 │   ├── test_cms.py        # CMS + cross-poster + router + campaign tests
 │   ├── test_localization.py  # Multi-language tests
 │   ├── test_optimizer.py  # Engagement optimizer tests
-│   └── test_export.py     # Export/import tests
+│   ├── test_export.py     # Export/import tests
+│   ├── test_dedup_competitors.py  # Dedup + competitor tests
+│   └── test_versioning.py # Content version tests
 └── utils/                 # Utilities
     ├── cdn.py             # S3/R2/MinIO/HTTP upload
     ├── media.py           # ffmpeg operations
@@ -544,7 +553,9 @@ instagram-generator/
     ├── media_validator.py # Image/video quality validation
     ├── dashboard.py       # Live system dashboard
     ├── watermark.py       # Brand watermark (image + video)
-    └── export_import.py   # Data export/import (portable JSON)
+    ├── export_import.py   # Data export/import (portable JSON)
+    ├── health.py          # API provider health monitoring
+    └── ical.py            # iCal calendar feed export
 ```
 
 ## Testing
@@ -567,7 +578,43 @@ python main.py doctor          # Check env, ffmpeg, API keys
 python main.py doctor --strict # Require all API keys
 ```
 
-## CLI commands (39 total)
+## Content versioning
+
+`cms/versioning.py` — Track edit history:
+- Every update creates a numbered version snapshot
+- Compare any two versions (field-level diff)
+- Rollback capability
+
+## Duplicate detection
+
+`skills/deduplication.py` — Prevent similar content:
+- Exact topic+category match detection
+- Fuzzy title similarity (token overlap ratio, threshold 65%)
+- Caption n-gram similarity
+- 30-day lookback window
+
+## Competitor tracking
+
+`strategy/competitors.py` — Monitor competitor accounts:
+- Track followers, avg likes/comments, posting frequency
+- Historical snapshots for growth analysis
+- Cross-competitor hashtag and category analysis
+
+## API health monitoring
+
+`utils/health.py` — Check all provider uptime:
+- Ping 12 API endpoints (generation + publishing)
+- Status: up/down/degraded + latency
+- Critical-only mode (NanoBanana, Kling, ElevenLabs, Instagram)
+
+## iCal calendar feed
+
+`utils/ical.py` — Export schedule as .ics:
+- CMS scheduled items and content calendar as VEVENT
+- Standard iCal format (Google Calendar, Outlook compatible)
+- Configurable source (cms, calendar, all)
+
+## CLI commands (44 total)
 
 ```bash
 # === Content Generation ===
@@ -712,6 +759,28 @@ python main.py localize --info                                    # Language pro
 python main.py export -o ./backup.json                            # Export all data
 python main.py import ./backup.json                               # Import (replace)
 python main.py import ./backup.json --merge                       # Import (merge)
+
+# === Duplicate Detection ===
+python main.py dedup -t "Palov recipe"                            # Check for duplicates
+python main.py dedup -s "Morning motivation"                      # Find similar content
+
+# === Competitor Tracking ===
+python main.py competitors                                        # View all competitors
+python main.py competitors --add --name "Rival" -p instagram --handle "@rival"
+python main.py competitors --update abc123 --followers 50000 --avg-likes 2000
+
+# === Content Versions ===
+python main.py versions                                           # Version summary
+python main.py versions --content-id abc123                       # Item version history
+python main.py versions --content-id abc123 --diff 1:2            # Compare versions
+
+# === API Health ===
+python main.py health --check                                     # Check all 12 providers
+python main.py health --critical                                  # Check 4 critical APIs
+
+# === iCal Export ===
+python main.py ical                                               # Export schedule.ics
+python main.py ical -o ./calendar.ics --source cms                # CMS items only
 ```
 
 ## Makefile

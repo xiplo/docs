@@ -15,7 +15,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Webhook server — receives Instagram insights callbacks
+  # Webhook + API server — CMS, monitoring, triggers
   webhook:
     build: .
     command: webhook --port 8080
@@ -25,16 +25,58 @@ services:
       - "8080:8080"
     volumes:
       - output_data:/app/output
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8080/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
 
-  # One-shot content generation (use with docker compose run)
-  # Example: docker compose run --rm generate auto-generate -c motivational -t "Muvaffaqiyat"
+  # Batch processor — process queue items on demand
+  batch:
+    build: .
+    command: batch --from-queue -l 10
+    env_file: .env
+    volumes:
+      - output_data:/app/output
+    profiles:
+      - tools
+
+  # One-shot content generation
   generate:
     build: .
+    env_file: .env
+    volumes:
+      - output_data:/app/output
+    profiles:
+      - tools
+
+  # System dashboard
+  dashboard:
+    build: .
+    command: dashboard
+    env_file: .env
+    volumes:
+      - output_data:/app/output
+    profiles:
+      - tools
+
+  # Health check all providers
+  health:
+    build: .
+    command: health --check
+    env_file: .env
+    profiles:
+      - tools
+
+  # Data backup
+  backup:
+    build: .
+    command: backup --create -l "docker"
     env_file: .env
     volumes:
       - output_data:/app/output

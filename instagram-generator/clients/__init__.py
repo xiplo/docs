@@ -8,6 +8,8 @@ from .youtube import YouTubeClient
 from .facebook import FacebookClient
 from .telegram_channel import TelegramChannelClient
 from .linkedin import LinkedInClient
+from .pinterest import PinterestClient
+from .threads import ThreadsClient
 
 __all__ = [
     "NanoBananaClient",
@@ -20,4 +22,6 @@ __all__ = [
     "FacebookClient",
     "TelegramChannelClient",
     "LinkedInClient",
+    "PinterestClient",
+    "ThreadsClient",
 ]

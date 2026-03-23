@@ -76,6 +76,22 @@ PLATFORM_SPECS: dict[str, dict] = {
         "video_formats": ["mp4"],
         "supports": ["text", "image", "article"],
     },
+    "pinterest": {
+        "caption_max": 500,
+        "hashtag_max": 20,
+        "video_max_s": 900,
+        "image_formats": ["jpg", "png"],
+        "video_formats": ["mp4"],
+        "supports": ["image", "video"],
+    },
+    "threads": {
+        "caption_max": 500,
+        "hashtag_max": 0,
+        "video_max_s": 300,
+        "image_formats": ["jpg", "png"],
+        "video_formats": ["mp4"],
+        "supports": ["text", "image", "video", "carousel"],
+    },
 }
 
 
@@ -264,6 +280,12 @@ class CrossPoster:
         elif platform == "linkedin":
             from clients.linkedin import LinkedInClient
             client = LinkedInClient()
+        elif platform == "pinterest":
+            from clients.pinterest import PinterestClient
+            client = PinterestClient()
+        elif platform == "threads":
+            from clients.threads import ThreadsClient
+            client = ThreadsClient()
 
         if client:
             self._clients[platform] = client
@@ -395,6 +417,36 @@ class CrossPoster:
 
         elif p == "linkedin":
             if adapted.media_urls:
+                return await client.post_image(
+                    image_url=adapted.media_urls[0],
+                    text=adapted.caption,
+                )
+            return await client.post_text(adapted.caption)
+
+        elif p == "pinterest":
+            if adapted.content_type == "video" and adapted.media_urls:
+                return await client.create_video_pin(
+                    video_url=adapted.media_urls[0],
+                    title=adapted.title or adapted.caption[:100],
+                    description=adapted.caption,
+                )
+            elif adapted.media_urls:
+                return await client.create_pin(
+                    image_url=adapted.media_urls[0],
+                    title=adapted.title or adapted.caption[:100],
+                    description=adapted.caption,
+                )
+
+        elif p == "threads":
+            if adapted.content_type == "video" and adapted.media_urls:
+                return await client.post_video(
+                    video_url=adapted.media_urls[0],
+                    text=adapted.caption,
+                )
+            elif adapted.content_type == "carousel" and adapted.media_urls:
+                items = [{"type": "IMAGE", "url": u} for u in adapted.media_urls]
+                return await client.post_carousel(items, adapted.caption)
+            elif adapted.media_urls:
                 return await client.post_image(
                     image_url=adapted.media_urls[0],
                     text=adapted.caption,
