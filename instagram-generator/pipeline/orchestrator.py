@@ -1,18 +1,22 @@
 """Content pipeline — orchestrates the full creative generation flow.
 
 Flow for a Reel:
-  1. Generate image via Nano Banana
-  2. Animate image into video via Kling 3.0
-  3. Synthesize Uzbek voiceover via Eleven Labs
-  4. Merge audio + video (ffmpeg)
-  5. Add text overlay (optional)
-  6. Upload final asset to CDN
-  7. Publish to Instagram
+  1. Moderation check
+  2. Generate image via Nano Banana
+  3. Animate image into video via Kling 3.0
+  4. Synthesize Uzbek voiceover via Eleven Labs
+  5. Merge audio + video (ffmpeg)
+  6. Add text overlay (optional)
+  7. Upload final asset to CDN
+  8. Publish to Instagram
 
 Flow for Image Post:
-  1. Generate image(s) via Nano Banana
-  2. Upload to CDN
-  3. Publish to Instagram (single or carousel)
+  1. Moderation check
+  2. Generate image(s) via Nano Banana
+  3. Upload to CDN
+  4. Publish to Instagram (single or carousel)
+
+All stages are instrumented with metrics (latency, counts, errors).
 """
 
 from __future__ import annotations
@@ -31,6 +35,7 @@ from skills.moderation import ContentModerator
 from utils.cdn import upload_to_cdn
 from utils.circuit_breaker import get_breaker
 from utils.media import add_text_overlay, merge_audio_video
+from utils.metrics import metrics
 from utils.rate_limiter import get_limiter
 
 logger = structlog.get_logger(__name__)
@@ -89,13 +94,16 @@ class ContentPipeline:
             created_at=datetime.now().isoformat(),
         )
 
+        metrics.inc("pipeline_runs_total", content_type=request.content_type)
+
         try:
             # Pre-publish moderation check
-            moderation = ContentModerator.check_content_request(
-                caption=request.caption,
-                hashtags=request.hashtags,
-                voiceover=request.voiceover_text,
-            )
+            with metrics.timer("pipeline_moderation_seconds"):
+                moderation = ContentModerator.check_content_request(
+                    caption=request.caption,
+                    hashtags=request.hashtags,
+                    voiceover=request.voiceover_text,
+                )
             if not moderation.passed:
                 logger.warning(
                     "pipeline.moderation_blocked",
@@ -105,22 +113,26 @@ class ContentPipeline:
                 )
                 result.status = "blocked"
                 result.error = f"Content moderation failed: {', '.join(moderation.flags)}"
+                metrics.inc("pipeline_blocked_total", content_type=request.content_type)
                 return result
 
-            if request.content_type == "reel":
-                await self._produce_reel(request, run_dir, result)
-            elif request.content_type == "story":
-                await self._produce_story(request, run_dir, result)
-            elif request.content_type == "carousel":
-                await self._produce_carousel(request, run_dir, result)
-            else:
-                await self._produce_image(request, run_dir, result)
+            with metrics.timer("pipeline_generation_seconds", content_type=request.content_type):
+                if request.content_type == "reel":
+                    await self._produce_reel(request, run_dir, result)
+                elif request.content_type == "story":
+                    await self._produce_story(request, run_dir, result)
+                elif request.content_type == "carousel":
+                    await self._produce_carousel(request, run_dir, result)
+                else:
+                    await self._produce_image(request, run_dir, result)
 
             result.status = "published"
+            metrics.inc("pipeline_published_total", content_type=request.content_type)
         except Exception as exc:
             logger.error("pipeline.failed", request_id=request_id, error=str(exc))
             result.status = "failed"
             result.error = str(exc)
+            metrics.inc("pipeline_errors_total", content_type=request.content_type)
 
         return result
 
@@ -138,27 +150,32 @@ class ContentPipeline:
 
         # 1. Generate base image (rate-limited + circuit-breaker)
         await get_limiter("nano_banana").acquire()
-        image_bytes = await get_breaker("nano_banana").call(
-            self.nano_banana.generate_image,
-            req.image_prompt,
-            style=req.image_style,
-            aspect_ratio="story",  # 9:16
-        )
+        with metrics.timer("api_latency_seconds", provider="nano_banana"):
+            image_bytes = await get_breaker("nano_banana").call(
+                self.nano_banana.generate_image,
+                req.image_prompt,
+                style=req.image_style,
+                aspect_ratio="story",  # 9:16
+            )
+        metrics.inc("api_calls_total", provider="nano_banana")
         image_path = run_dir / "base_image.png"
         await self.nano_banana.save_image(image_bytes, image_path)
         result.local_paths.append(str(image_path))
 
         # 2. Upload image to CDN for Kling input
-        image_cdn_url = await upload_to_cdn(image_path)
+        with metrics.timer("cdn_upload_seconds"):
+            image_cdn_url = await upload_to_cdn(image_path)
 
         # 3. Animate image → video via Kling 3.0
         await get_limiter("kling").acquire()
-        video_bytes = await get_breaker("kling").call(
-            self.kling.image_to_video,
-            image_url=image_cdn_url,
-            prompt=req.image_prompt,
-            duration=req.video_duration,
-        )
+        with metrics.timer("api_latency_seconds", provider="kling"):
+            video_bytes = await get_breaker("kling").call(
+                self.kling.image_to_video,
+                image_url=image_cdn_url,
+                prompt=req.image_prompt,
+                duration=req.video_duration,
+            )
+        metrics.inc("api_calls_total", provider="kling")
         raw_video_path = run_dir / "raw_video.mp4"
         await self.kling.save_video(video_bytes, raw_video_path)
 
@@ -166,16 +183,19 @@ class ContentPipeline:
         final_video_path = raw_video_path
         if req.voiceover_text:
             await get_limiter("elevenlabs").acquire()
-            audio_bytes = await get_breaker("elevenlabs").call(
-                self.elevenlabs.synthesize, req.voiceover_text
-            )
+            with metrics.timer("api_latency_seconds", provider="elevenlabs"):
+                audio_bytes = await get_breaker("elevenlabs").call(
+                    self.elevenlabs.synthesize, req.voiceover_text
+                )
+            metrics.inc("api_calls_total", provider="elevenlabs")
             audio_path = run_dir / "voiceover.mp3"
             await self.elevenlabs.save_audio(audio_bytes, audio_path)
             result.local_paths.append(str(audio_path))
 
             # 5. Merge audio + video
-            merged_path = run_dir / "merged.mp4"
-            merge_audio_video(raw_video_path, audio_path, merged_path)
+            with metrics.timer("ffmpeg_merge_seconds"):
+                merged_path = run_dir / "merged.mp4"
+                merge_audio_video(raw_video_path, audio_path, merged_path)
             final_video_path = merged_path
 
         # 6. Add subtitle overlay (optional)
@@ -187,7 +207,8 @@ class ContentPipeline:
         result.local_paths.append(str(final_video_path))
 
         # 7. Upload final video to CDN
-        video_cdn_url = await upload_to_cdn(final_video_path)
+        with metrics.timer("cdn_upload_seconds"):
+            video_cdn_url = await upload_to_cdn(final_video_path)
         result.cdn_urls.append(video_cdn_url)
 
         # 8. Build caption with hashtags
@@ -195,11 +216,13 @@ class ContentPipeline:
 
         # 9. Publish Reel to Instagram
         await get_limiter("instagram").acquire()
-        media_id = await get_breaker("instagram").call(
-            self.instagram.post_reel,
-            video_url=video_cdn_url,
-            caption=full_caption,
-        )
+        with metrics.timer("api_latency_seconds", provider="instagram"):
+            media_id = await get_breaker("instagram").call(
+                self.instagram.post_reel,
+                video_url=video_cdn_url,
+                caption=full_caption,
+            )
+        metrics.inc("api_calls_total", provider="instagram")
         result.media_id = media_id
 
     # ------------------------------------------------------------------
@@ -215,18 +238,23 @@ class ContentPipeline:
         logger.info("pipeline.story.start")
 
         # Generate image for story
-        image_bytes = await self.nano_banana.generate_image(
-            req.image_prompt,
-            style=req.image_style,
-            aspect_ratio="story",
-        )
+        with metrics.timer("api_latency_seconds", provider="nano_banana"):
+            image_bytes = await self.nano_banana.generate_image(
+                req.image_prompt,
+                style=req.image_style,
+                aspect_ratio="story",
+            )
+        metrics.inc("api_calls_total", provider="nano_banana")
         image_path = run_dir / "story_image.png"
         await self.nano_banana.save_image(image_bytes, image_path)
 
-        image_cdn_url = await upload_to_cdn(image_path)
+        with metrics.timer("cdn_upload_seconds"):
+            image_cdn_url = await upload_to_cdn(image_path)
         result.cdn_urls.append(image_cdn_url)
 
-        media_id = await self.instagram.post_story(media_url=image_cdn_url)
+        with metrics.timer("api_latency_seconds", provider="instagram"):
+            media_id = await self.instagram.post_story(media_url=image_cdn_url)
+        metrics.inc("api_calls_total", provider="instagram")
         result.media_id = media_id
 
     # ------------------------------------------------------------------
@@ -242,9 +270,11 @@ class ContentPipeline:
         logger.info("pipeline.carousel.start", slides=len(req.carousel_prompts))
 
         prompts = req.carousel_prompts or [req.image_prompt]
-        images = await self.nano_banana.generate_carousel(
-            prompts, style=req.image_style
-        )
+        with metrics.timer("api_latency_seconds", provider="nano_banana"):
+            images = await self.nano_banana.generate_carousel(
+                prompts, style=req.image_style
+            )
+        metrics.inc("api_calls_total", provider="nano_banana")
 
         media_items = []
         for i, img_bytes in enumerate(images):
@@ -255,7 +285,10 @@ class ContentPipeline:
             media_items.append({"url": cdn_url, "type": "IMAGE"})
 
         full_caption = self._build_caption(req.caption, req.hashtags)
-        media_id = await self.instagram.post_carousel(media_items, full_caption)
+
+        with metrics.timer("api_latency_seconds", provider="instagram"):
+            media_id = await self.instagram.post_carousel(media_items, full_caption)
+        metrics.inc("api_calls_total", provider="instagram")
         result.media_id = media_id
 
     # ------------------------------------------------------------------
@@ -270,22 +303,28 @@ class ContentPipeline:
     ) -> None:
         logger.info("pipeline.image.start")
 
-        image_bytes = await self.nano_banana.generate_image(
-            req.image_prompt,
-            style=req.image_style,
-            aspect_ratio="feed_portrait",
-        )
+        with metrics.timer("api_latency_seconds", provider="nano_banana"):
+            image_bytes = await self.nano_banana.generate_image(
+                req.image_prompt,
+                style=req.image_style,
+                aspect_ratio="feed_portrait",
+            )
+        metrics.inc("api_calls_total", provider="nano_banana")
         image_path = run_dir / "post_image.png"
         await self.nano_banana.save_image(image_bytes, image_path)
         result.local_paths.append(str(image_path))
 
-        cdn_url = await upload_to_cdn(image_path)
+        with metrics.timer("cdn_upload_seconds"):
+            cdn_url = await upload_to_cdn(image_path)
         result.cdn_urls.append(cdn_url)
 
         full_caption = self._build_caption(req.caption, req.hashtags)
-        media_id = await self.instagram.post_image(
-            image_url=cdn_url, caption=full_caption
-        )
+
+        with metrics.timer("api_latency_seconds", provider="instagram"):
+            media_id = await self.instagram.post_image(
+                image_url=cdn_url, caption=full_caption
+            )
+        metrics.inc("api_calls_total", provider="instagram")
         result.media_id = media_id
 
     # ------------------------------------------------------------------

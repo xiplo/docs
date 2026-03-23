@@ -1022,5 +1022,66 @@ def library(category: str, use: str):
         click.echo(TemplateLibrary.display(category))
 
 
+# =====================================================================
+# dashboard command
+# =====================================================================
+
+
+@cli.command()
+def dashboard():
+    """Show live system dashboard — all subsystems at a glance."""
+    from utils.dashboard import Dashboard
+    click.echo(Dashboard.render())
+
+
+# =====================================================================
+# plugins command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--load", is_flag=True, help="Discover and load plugins")
+def plugins(load: bool):
+    """View and manage pipeline plugins."""
+    from plugins import plugin_registry
+
+    if load:
+        count = plugin_registry.load_plugins()
+        click.echo(f"  Loaded {count} plugin(s).")
+
+    click.echo(plugin_registry.display())
+
+
+# =====================================================================
+# validate command
+# =====================================================================
+
+
+@cli.command()
+@click.argument("path")
+@click.option("--type", "content_type", default="image", help="Content type (image/reel/story)")
+def validate(path: str, content_type: str):
+    """Validate media files against Instagram requirements."""
+    from pathlib import Path as P
+    from utils.media_validator import MediaValidator
+
+    file_path = P(path)
+    result = MediaValidator.validate_for_pipeline(file_path, content_type)
+
+    if result.valid:
+        click.echo(f"  VALID — {content_type}")
+    else:
+        click.echo(f"  INVALID — {content_type}")
+
+    for key, val in result.metadata.items():
+        click.echo(f"    {key}: {val}")
+
+    for err in result.errors:
+        click.echo(f"    ERROR: {err}")
+
+    for warn in result.warnings:
+        click.echo(f"    WARNING: {warn}")
+
+
 if __name__ == "__main__":
     cli()

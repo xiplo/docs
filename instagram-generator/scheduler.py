@@ -24,6 +24,7 @@ from config import settings
 from pipeline.orchestrator import ContentPipeline, ContentRequest
 from pipeline.queue import ContentQueue
 from strategy.engine import StrategyEngine
+from strategy.trends import TrendEngine
 
 logger = structlog.get_logger(__name__)
 
@@ -86,14 +87,34 @@ class ContentScheduler:
             logger.info("scheduler.stats", **self._stats)
 
     async def _execute_post(self, time_slot: str) -> None:
-        """Post content — from queue first, then strategy engine."""
+        """Post content — queue → trends → strategy engine."""
         # 1. Try queue first
         queue_item = self.queue.dequeue()
         if queue_item:
             await self._post_from_queue(queue_item, time_slot)
             return
 
-        # 2. Fall back to strategy engine
+        # 2. Check for trending topics
+        trending = TrendEngine.get_current_trends(limit=1)
+        if trending:
+            suggestion = TrendEngine.suggest_content_for_trend(trending[0])
+            logger.info(
+                "scheduler.trending_topic",
+                topic=suggestion["topic"],
+                trend=trending[0].name,
+            )
+            self.queue.enqueue(
+                topic=suggestion["topic"],
+                category=suggestion["category"],
+                content_type=suggestion["content_type"],
+                priority=suggestion["priority"],
+            )
+            queue_item = self.queue.dequeue()
+            if queue_item:
+                await self._post_from_queue(queue_item, time_slot)
+                return
+
+        # 3. Fall back to strategy engine
         await self._post_from_strategy(time_slot)
 
     async def _post_from_queue(self, item, time_slot: str) -> None:

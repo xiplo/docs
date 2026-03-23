@@ -186,6 +186,47 @@ Winner determined by composite score: `engagement_rate * 0.4 + reach * 0.3 + sav
 - Refresh 7 days before expiration
 - Auto-update `.env` file with new token
 
+## Plugin system
+
+`plugins/__init__.py` — Extensible hook architecture:
+- 7 hook events: `on_pre_generate`, `on_post_generate`, `on_published`, `on_failed`, `on_moderation`, `on_schedule`, `on_queue_add`
+- Supports sync and async handlers
+- Auto-discovery from `plugins/` directory
+- Example plugin included (`example_logger.py`)
+
+## Media validation
+
+`utils/media_validator.py` — Instagram spec compliance:
+- Image: dimensions (320-4096px), format (.jpg/.png/.webp), file size (<8MB)
+- Video: format (.mp4/.mov), file size (<100MB), duration limits
+- Aspect ratio warnings (9:16 for stories/reels, 4:5 for feed)
+- CLI: `python main.py validate ./image.png --type reel`
+
+## Webhook authentication
+
+`utils/auth.py` — API key protection:
+- Supports `Authorization: Bearer <key>` and `X-API-Key: <key>` headers
+- `/health` is always public (no auth required)
+- Instagram webhook uses its own HMAC-SHA256 signature
+- Disabled when `WEBHOOK_API_KEY` is not set
+
+## System dashboard
+
+`utils/dashboard.py` — Unified status overview:
+- Queue depth, circuit breaker states, rate limiter usage
+- Token health, notification channels, active plugins
+- Top metrics counters, recent post history
+- CLI: `python main.py dashboard`
+
+## Pipeline metrics instrumentation
+
+`pipeline/orchestrator.py` — Every stage is metered:
+- `pipeline_runs_total` — Counter per content type
+- `pipeline_published_total` / `pipeline_errors_total` / `pipeline_blocked_total`
+- `api_latency_seconds` — Histogram per provider (NanoBanana, Kling, ElevenLabs, Instagram)
+- `api_calls_total` — Counter per provider
+- `cdn_upload_seconds`, `ffmpeg_merge_seconds`, `pipeline_moderation_seconds`
+
 ## Webhook server
 
 `webhook.py` — HTTP API for monitoring and triggers:
@@ -277,11 +318,11 @@ Recycle score = base 5.0 + engagement boost + reach + saves
 ```
 instagram-generator/
 ├── CLAUDE.md              # This file
-├── main.py                # CLI entry point (26 commands)
+├── main.py                # CLI entry point (29 commands)
 ├── config.py              # Settings via .env
 ├── scheduler.py           # Auto-posting scheduler
 ├── Makefile               # Build/dev/deploy shortcuts
-├── webhook.py             # HTTP webhook server (15 endpoints)
+├── webhook.py             # HTTP webhook server (15 endpoints, API key auth)
 ├── accounts.py            # Multi-account management
 ├── notifications.py       # Telegram/webhook/log notifications
 ├── Dockerfile             # Container image
@@ -319,6 +360,9 @@ instagram-generator/
 │   ├── calendar.py        # Content calendar
 │   ├── recycler.py        # Content recycling engine
 │   └── trends.py          # Trending topics & seasonal events
+├── plugins/               # Extension system
+│   ├── __init__.py        # Plugin registry + hook system
+│   └── example_logger.py  # Example plugin (logging hooks)
 ├── templates/             # Content templates
 │   ├── prompts.py         # Prompt templates
 │   └── library.py         # Pre-built content blueprints (11 templates)
@@ -337,7 +381,10 @@ instagram-generator/
 │   ├── test_hashtags.py   # Hashtag research tests
 │   ├── test_backup.py     # Backup/restore tests
 │   ├── test_metrics.py    # Metrics collection tests
-│   └── test_templates.py  # Template library tests
+│   ├── test_templates.py  # Template library tests
+│   ├── test_plugins.py    # Plugin system tests
+│   ├── test_media_validator.py  # Media validation tests
+│   └── test_auth.py       # Webhook auth tests
 └── utils/                 # Utilities
     ├── cdn.py             # S3/R2/MinIO/HTTP upload
     ├── media.py           # ffmpeg operations
@@ -347,7 +394,10 @@ instagram-generator/
     ├── logging.py         # Structured logging (dev/prod)
     ├── token_refresh.py   # Instagram token auto-refresh
     ├── backup.py          # Data backup/restore
-    └── metrics.py         # Prometheus-compatible metrics
+    ├── metrics.py         # Prometheus-compatible metrics
+    ├── auth.py            # Webhook API key authentication
+    ├── media_validator.py # Image/video quality validation
+    └── dashboard.py       # Live system dashboard
 ```
 
 ## Testing
@@ -370,7 +420,7 @@ python main.py doctor          # Check env, ffmpeg, API keys
 python main.py doctor --strict # Require all API keys
 ```
 
-## CLI commands (26 total)
+## CLI commands (29 total)
 
 ```bash
 # === Content Generation ===
@@ -455,6 +505,17 @@ python main.py metrics --json                                     # JSON export
 python main.py library                                            # Browse all templates
 python main.py library -c recipe                                  # Filter by category
 python main.py library --use palov_recipe                         # Use + enqueue
+
+# === System Dashboard ===
+python main.py dashboard                                          # Full system overview
+
+# === Plugins ===
+python main.py plugins                                            # View loaded plugins
+python main.py plugins --load                                     # Discover + load plugins
+
+# === Media Validation ===
+python main.py validate ./output/image.png --type image           # Validate image
+python main.py validate ./output/video.mp4 --type reel            # Validate video
 ```
 
 ## Makefile

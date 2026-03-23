@@ -37,6 +37,13 @@ async def start_webhook_server(port: int = 8080) -> None:
 
     class WebhookHandler(BaseHTTPRequestHandler):
         def do_GET(self):
+            # Auth check for non-public endpoints
+            if self.path != "/health":
+                from utils.auth import check_api_key
+                if not check_api_key(self.headers):
+                    self._respond(401, {"error": "Unauthorized — set X-API-Key header"})
+                    return
+
             if self.path == "/health":
                 self._respond(200, {
                     "status": "ok",
@@ -111,6 +118,13 @@ async def start_webhook_server(port: int = 8080) -> None:
         def do_POST(self):
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length) if content_length else b""
+
+            # Auth check for trigger/review endpoints (Instagram webhook uses HMAC)
+            if self.path != "/webhook/instagram":
+                from utils.auth import check_api_key
+                if not check_api_key(self.headers):
+                    self._respond(401, {"error": "Unauthorized — set X-API-Key header"})
+                    return
 
             if self.path == "/webhook/instagram":
                 self._handle_instagram_webhook(body)
