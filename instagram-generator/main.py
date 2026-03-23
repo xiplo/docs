@@ -1323,5 +1323,104 @@ def report(platforms, categories, top):
         click.echo(agg.generate_report())
 
 
+# =====================================================================
+# optimizer command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--platform", "-p", default="", help="Specific platform")
+@click.option("--schedule", is_flag=True, help="Generate optimized schedule")
+@click.option("--posts-per-day", default=3, help="Posts per day (for schedule)")
+def optimizer(platform, schedule, posts_per_day):
+    """Find best posting times per platform."""
+    from strategy.optimizer import EngagementOptimizer
+
+    if schedule:
+        platforms = [p.strip() for p in platform.split(",")] if platform else [
+            "instagram", "tiktok", "youtube", "facebook", "telegram"
+        ]
+        sched = EngagementOptimizer.get_schedule(platforms, posts_per_day)
+        click.echo("\n  Optimized Schedule:")
+        for p, times in sched.items():
+            click.echo(f"    {p:<12} {', '.join(times)}")
+    elif platform:
+        results = EngagementOptimizer.optimize(platform)
+        for r in results:
+            click.echo(f"\n  {r.platform.upper()} ({r.confidence})")
+            click.echo(f"  Times: {', '.join(r.best_times[:3])}")
+            click.echo(f"  Days:  {', '.join(r.best_days[:3])}")
+    else:
+        click.echo(EngagementOptimizer.display())
+
+
+# =====================================================================
+# localize command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--text", "-t", default="", help="Caption text (Uzbek)")
+@click.option("--category", "-c", default="motivational", help="Category")
+@click.option("--langs", default="uz,ru,en", help="Target languages")
+@click.option("--info", is_flag=True, help="Show language profiles")
+def localize(text, category, langs, info):
+    """Generate multi-language captions."""
+    from skills.localization import CaptionLocalizer
+
+    if info:
+        click.echo(CaptionLocalizer.display())
+        return
+
+    if not text:
+        click.echo("  Provide --text to localize.")
+        return
+
+    target = [l.strip() for l in langs.split(",")]
+    result = CaptionLocalizer.localize(text, category=category, target_langs=target)
+
+    click.echo(f"\n  [uz] {result.uz}")
+    if result.ru:
+        click.echo(f"  [ru] {result.ru}")
+    if result.en:
+        click.echo(f"  [en] {result.en}")
+    click.echo(f"\n  Hashtags UZ: {', '.join(result.hashtags_uz)}")
+    click.echo(f"  Hashtags RU: {', '.join(result.hashtags_ru)}")
+    click.echo(f"  Hashtags EN: {', '.join(result.hashtags_en)}")
+
+
+# =====================================================================
+# export/import commands
+# =====================================================================
+
+
+@cli.command(name="export")
+@click.option("--output", "-o", default="", help="Output file path")
+def export_data(output):
+    """Export all data to a portable JSON archive."""
+    from utils.export_import import DataExporter
+
+    path = DataExporter.export_all(output)
+    click.echo(f"  Exported to: {path}")
+    click.echo(DataExporter.display_archive(str(path)))
+
+
+@cli.command(name="import")
+@click.argument("archive_path")
+@click.option("--merge", is_flag=True, help="Merge with existing data (default: replace)")
+def import_data(archive_path, merge):
+    """Import data from a JSON archive."""
+    from utils.export_import import DataExporter
+
+    summary = DataExporter.import_all(archive_path, merge=merge)
+    click.echo(f"\n  Imported: {len(summary['imported'])} sources")
+    for item in summary["imported"]:
+        click.echo(f"    + {item}")
+    if summary["errors"]:
+        click.echo(f"  Errors: {len(summary['errors'])}")
+        for err in summary["errors"]:
+            click.echo(f"    ! {err}")
+
+
 if __name__ == "__main__":
     cli()

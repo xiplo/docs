@@ -188,6 +188,43 @@ Winner determined by composite score: `engagement_rate * 0.4 + reach * 0.3 + sav
 - Refresh 7 days before expiration
 - Auto-update `.env` file with new token
 
+## Multi-language support
+
+`skills/localization.py` — Caption generation in 3 languages:
+- **Uzbek (uz)** — Primary audience, native CTAs
+- **Russian (ru)** — Bilingual Uzbek audience
+- **English (en)** — International reach
+- Per-language hashtag pools (4 categories each)
+- Per-language CTAs (follow, like, save, comment, share)
+- Translation scaffolding (extensible to API-based translation)
+
+## Engagement optimizer
+
+`strategy/optimizer.py` — Best posting times per platform:
+- Analyzes historical performance data
+- Default optimal times from industry data (7 platforms)
+- Confidence levels: default → low → medium → high
+- Generates optimized multi-platform schedule
+- Best days of week per platform
+
+## Brand watermarks
+
+`utils/watermark.py` — Brand protection for images and videos:
+- Text watermarks (@handle, brand name)
+- Logo overlay watermarks (PNG with transparency)
+- 5 position options (bottom-right, bottom-left, top-right, top-left, center)
+- Opacity control (0.0-1.0)
+- Per-platform skip rules
+- Video watermarks via ffmpeg
+
+## Data export/import
+
+`utils/export_import.py` — Portable data archives:
+- Exports 12 data sources to a single JSON file
+- Import with replace or merge modes
+- Auto-backup before import
+- Archive viewer with stats
+
 ## Plugin system
 
 `plugins/__init__.py` — Extensible hook architecture:
@@ -250,6 +287,18 @@ Winner determined by composite score: `engagement_rate * 0.4 + reach * 0.3 + sav
 | `/metrics` | GET | Prometheus metrics export |
 | `/hashtags` | GET | Hashtag pools & suggestions |
 | `/library` | GET | Content template library |
+| `/cms` | GET | CMS content listing |
+| `/campaigns` | GET | Campaign listing |
+| `/assets` | GET | Asset library |
+| `/rules` | GET | Publishing rules |
+| `/report` | GET | Cross-platform analytics |
+| `/optimizer` | GET | Best posting times |
+| `/languages` | GET | Language profiles |
+| `/dashboard` | GET | Full system dashboard |
+| `/cms/create` | POST | Create CMS content item |
+| `/cms/crosspost/:id` | POST | Cross-post content |
+| `/export` | POST | Export all data |
+| `/import` | POST | Import data archive |
 
 ## Content Management System (CMS)
 
@@ -395,11 +444,11 @@ Recycle score = base 5.0 + engagement boost + reach + saves
 ```
 instagram-generator/
 ├── CLAUDE.md              # This file
-├── main.py                # CLI entry point (35 commands)
+├── main.py                # CLI entry point (39 commands)
 ├── config.py              # Settings via .env
 ├── scheduler.py           # Auto-posting scheduler
 ├── Makefile               # Build/dev/deploy shortcuts
-├── webhook.py             # HTTP webhook server (15 endpoints, API key auth)
+├── webhook.py             # HTTP webhook server (25 endpoints, API key auth)
 ├── accounts.py            # Multi-account management
 ├── notifications.py       # Telegram/webhook/log notifications
 ├── Dockerfile             # Container image
@@ -444,12 +493,14 @@ instagram-generator/
 │   ├── platform.py        # Instagram optimization
 │   ├── analytics.py       # Performance analytics
 │   ├── moderation.py      # Content safety & cultural checks
-│   └── hashtags.py        # Hashtag research & banned detection
+│   ├── hashtags.py        # Hashtag research & banned detection
+│   └── localization.py    # Multi-language captions (uz, ru, en)
 ├── strategy/              # Content strategy
 │   ├── engine.py          # Strategy planner
 │   ├── calendar.py        # Content calendar
 │   ├── recycler.py        # Content recycling engine
-│   └── trends.py          # Trending topics & seasonal events
+│   ├── trends.py          # Trending topics & seasonal events
+│   └── optimizer.py       # Best-time-to-post per platform
 ├── plugins/               # Extension system
 │   ├── __init__.py        # Plugin registry + hook system
 │   └── example_logger.py  # Example plugin (logging hooks)
@@ -475,7 +526,10 @@ instagram-generator/
 │   ├── test_plugins.py    # Plugin system tests
 │   ├── test_media_validator.py  # Media validation tests
 │   ├── test_auth.py       # Webhook auth tests
-│   └── test_cms.py        # CMS + cross-poster + router + campaign tests
+│   ├── test_cms.py        # CMS + cross-poster + router + campaign tests
+│   ├── test_localization.py  # Multi-language tests
+│   ├── test_optimizer.py  # Engagement optimizer tests
+│   └── test_export.py     # Export/import tests
 └── utils/                 # Utilities
     ├── cdn.py             # S3/R2/MinIO/HTTP upload
     ├── media.py           # ffmpeg operations
@@ -488,7 +542,9 @@ instagram-generator/
     ├── metrics.py         # Prometheus-compatible metrics
     ├── auth.py            # Webhook API key authentication
     ├── media_validator.py # Image/video quality validation
-    └── dashboard.py       # Live system dashboard
+    ├── dashboard.py       # Live system dashboard
+    ├── watermark.py       # Brand watermark (image + video)
+    └── export_import.py   # Data export/import (portable JSON)
 ```
 
 ## Testing
@@ -511,7 +567,7 @@ python main.py doctor          # Check env, ffmpeg, API keys
 python main.py doctor --strict # Require all API keys
 ```
 
-## CLI commands (35 total)
+## CLI commands (39 total)
 
 ```bash
 # === Content Generation ===
@@ -641,6 +697,21 @@ python main.py report                                             # Full cross-p
 python main.py report --platforms                                 # Platform breakdown
 python main.py report --categories                                # Category breakdown
 python main.py report --top 5                                     # Top 5 performers
+
+# === Engagement Optimizer ===
+python main.py optimizer                                          # All platforms
+python main.py optimizer -p instagram                             # Single platform
+python main.py optimizer --schedule                               # Generate optimal schedule
+python main.py optimizer --schedule --posts-per-day 4             # Custom frequency
+
+# === Multi-Language ===
+python main.py localize -t "Palov tayyorlash!" -c recipe          # Localize caption
+python main.py localize --info                                    # Language profiles
+
+# === Data Export/Import ===
+python main.py export -o ./backup.json                            # Export all data
+python main.py import ./backup.json                               # Import (replace)
+python main.py import ./backup.json --merge                       # Import (merge)
 ```
 
 ## Makefile

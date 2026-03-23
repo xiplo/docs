@@ -112,6 +112,43 @@ async def start_webhook_server(port: int = 8080) -> None:
                 from templates.library import TemplateLibrary
                 self._respond_text(200, TemplateLibrary.display())
 
+            elif self.path == "/cms":
+                from cms.content_manager import ContentManager
+                cm = ContentManager()
+                self._respond_text(200, cm.display())
+
+            elif self.path == "/campaigns":
+                from cms.campaigns import CampaignManager
+                mgr = CampaignManager()
+                self._respond_text(200, mgr.display())
+
+            elif self.path == "/assets":
+                from cms.asset_library import AssetLibrary
+                lib = AssetLibrary()
+                self._respond_text(200, lib.display())
+
+            elif self.path == "/rules":
+                from cms.publisher import PublishingRouter
+                router = PublishingRouter()
+                self._respond_text(200, router.display())
+
+            elif self.path == "/report":
+                from cms.analytics_aggregator import AnalyticsAggregator
+                agg = AnalyticsAggregator()
+                self._respond_text(200, agg.generate_report())
+
+            elif self.path == "/optimizer":
+                from strategy.optimizer import EngagementOptimizer
+                self._respond_text(200, EngagementOptimizer.display())
+
+            elif self.path == "/languages":
+                from skills.localization import CaptionLocalizer
+                self._respond_text(200, CaptionLocalizer.display())
+
+            elif self.path == "/dashboard":
+                from utils.dashboard import Dashboard
+                self._respond_text(200, Dashboard.render())
+
             else:
                 self._respond(404, {"error": "Not found"})
 
@@ -142,6 +179,19 @@ async def start_webhook_server(port: int = 8080) -> None:
             elif self.path.startswith("/review/reject/"):
                 item_id = self.path.split("/")[-1]
                 self._handle_review_action(item_id, "reject", body)
+
+            elif self.path == "/cms/create":
+                self._handle_cms_create(body)
+
+            elif self.path.startswith("/cms/crosspost/"):
+                content_id = self.path.split("/")[-1]
+                self._handle_crosspost(content_id, body)
+
+            elif self.path == "/export":
+                self._handle_export()
+
+            elif self.path == "/import":
+                self._handle_import(body)
 
             else:
                 self._respond(404, {"error": "Not found"})
@@ -276,6 +326,84 @@ async def start_webhook_server(port: int = 8080) -> None:
                     self._respond(200, {"status": "rejected", "id": item_id})
                 else:
                     self._respond(404, {"error": f"Review item {item_id} not found or not pending"})
+
+        def _handle_cms_create(self, body: bytes):
+            """Create a new CMS content item."""
+            try:
+                data = json.loads(body) if body else {}
+            except json.JSONDecodeError:
+                self._respond(400, {"error": "Invalid JSON"})
+                return
+
+            from cms.content_manager import ContentManager
+            cm = ContentManager()
+            item = cm.create(
+                title=data.get("title", ""),
+                topic=data.get("topic", ""),
+                category=data.get("category", "motivational"),
+                content_type=data.get("content_type", "reel"),
+                caption=data.get("caption", ""),
+                hashtags=data.get("hashtags", []),
+                target_platforms=data.get("platforms", []),
+                campaign_id=data.get("campaign_id", ""),
+                tags=data.get("tags", []),
+            )
+            self._respond(201, {"status": "created", "id": item.id})
+
+        def _handle_crosspost(self, content_id: str, body: bytes):
+            """Trigger cross-posting for a content item."""
+            try:
+                data = json.loads(body) if body else {}
+            except json.JSONDecodeError:
+                data = {}
+
+            from cms.content_manager import ContentManager
+            from cms.publisher import PublishingRouter
+
+            cm = ContentManager()
+            item = cm.get(content_id)
+            if not item:
+                self._respond(404, {"error": f"Content {content_id} not found"})
+                return
+
+            platforms = data.get("platforms", [])
+            if not platforms:
+                router = PublishingRouter()
+                platforms = router.get_platforms({
+                    "content_type": item.content_type,
+                    "category": item.category,
+                })
+
+            cm.mark_publishing(content_id)
+            self._respond(202, {
+                "status": "publishing",
+                "id": content_id,
+                "platforms": platforms,
+            })
+
+        def _handle_export(self):
+            """Export all data to a JSON archive."""
+            from utils.export_import import DataExporter
+            path = DataExporter.export_all()
+            self._respond(200, {"status": "exported", "path": str(path)})
+
+        def _handle_import(self, body: bytes):
+            """Import data from a JSON archive path."""
+            try:
+                data = json.loads(body) if body else {}
+            except json.JSONDecodeError:
+                self._respond(400, {"error": "Invalid JSON"})
+                return
+
+            archive_path = data.get("path", "")
+            merge = data.get("merge", False)
+            if not archive_path:
+                self._respond(400, {"error": "path is required"})
+                return
+
+            from utils.export_import import DataExporter
+            summary = DataExporter.import_all(archive_path, merge=merge)
+            self._respond(200, {"status": "imported", "summary": summary})
 
         def _process_insights(self, value: dict):
             """Store Instagram insights for analytics."""

@@ -87,7 +87,27 @@ class ContentScheduler:
             logger.info("scheduler.stats", **self._stats)
 
     async def _execute_post(self, time_slot: str) -> None:
-        """Post content — queue → trends → strategy engine."""
+        """Post content — CMS scheduled → queue → trends → strategy engine."""
+        # 0. Check CMS for scheduled items due now
+        try:
+            from cms.content_manager import ContentManager
+            cm = ContentManager()
+            scheduled = cm.list_scheduled()
+            now = datetime.now(self.tz).isoformat()
+            for item in scheduled:
+                if item.scheduled_at and item.scheduled_at <= now:
+                    logger.info("scheduler.cms_item", id=item.id, topic=item.topic)
+                    cm.mark_publishing(item.id)
+                    self.queue.enqueue(
+                        topic=item.topic,
+                        category=item.category,
+                        content_type=item.content_type,
+                        priority=9,
+                    )
+                    break
+        except Exception as exc:
+            logger.debug("scheduler.cms_check_skip", error=str(exc))
+
         # 1. Try queue first
         queue_item = self.queue.dequeue()
         if queue_item:
