@@ -1,9 +1,11 @@
-# Instagram Content Generator — CLAUDE.md
+# Social Content CMS — CLAUDE.md
 
 ## Project overview
 
-Automated Instagram content generation and auto-posting system for Uzbek-language audience.
-Integrates Nano Banana (images), Kling 3.0 (video), Eleven Labs (Uzbek TTS), and Instagram Graph API.
+Full-stack content management system for multi-platform social media.
+Auto-generates and cross-posts Uzbek-language content across 7 platforms:
+Instagram, Twitter/X, TikTok, YouTube Shorts, Facebook, Telegram, LinkedIn.
+Powered by AI agents (Nano Banana images, Kling 3.0 video, Eleven Labs Uzbek TTS).
 
 ## Architecture
 
@@ -249,6 +251,81 @@ Winner determined by composite score: `engagement_rate * 0.4 + reach * 0.3 + sav
 | `/hashtags` | GET | Hashtag pools & suggestions |
 | `/library` | GET | Content template library |
 
+## Content Management System (CMS)
+
+`cms/` — Full content lifecycle and multi-platform publishing:
+
+### Content Manager (`cms/content_manager.py`)
+Lifecycle: `draft → review → approved → scheduled → publishing → published → archived`
+- CRUD operations on content items
+- Status transitions with timestamps
+- Platform-specific versions per item
+- Campaign and tag association
+
+### Cross-Poster (`cms/cross_poster.py`)
+Adapts and publishes to 7 platforms with automatic adjustments:
+
+| Platform | Caption Limit | Hashtags | Content Types |
+|----------|:---:|:---:|---|
+| Instagram | 2,200 | 30 | image, reel, carousel, story |
+| Twitter/X | 280 | 5 | text, image, video, thread |
+| TikTok | 2,200 | 30 | video, photo_carousel |
+| YouTube | 100 (title) | 15 | short, video |
+| Facebook | 63,206 | 30 | text, image, video, reel |
+| Telegram | 1,024 | — | text, image, video, album |
+| LinkedIn | 3,000 | 5 | text, image, article |
+
+Auto-adaptations:
+- Twitter threads for long captions (auto-split with numbering)
+- YouTube #Shorts tag injection
+- Telegram inline hashtags
+- LinkedIn professional tone
+- Content type mapping (reel→short on YouTube, carousel→album on Telegram)
+
+### Publishing Router (`cms/publisher.py`)
+Rules-based content dispatch:
+
+| Rule | Content Match | Target Platforms |
+|------|--------------|-----------------|
+| Reels | type=reel | IG, TikTok, YouTube, Facebook |
+| Images | type=image | IG, Facebook, Telegram, LinkedIn |
+| Carousels | type=carousel | IG, Facebook, Telegram, TikTok |
+| Recipes | cat=recipe | IG, Facebook, Telegram |
+| Motivational | cat=motivational | All 7 platforms |
+
+### Asset Library (`cms/asset_library.py`)
+- Tag-based organization and search
+- Auto-detect media type, dimensions, format, size
+- Usage tracking (which content used which asset)
+- Unused asset discovery
+
+### Campaign Manager (`cms/campaigns.py`)
+- Named campaigns with date ranges and goals
+- Track content items per campaign
+- Published/failed counts
+- Pause/resume/complete lifecycle
+
+### Analytics Aggregator (`cms/analytics_aggregator.py`)
+- Unified metrics across all platforms
+- Platform comparison (impressions, engagement, likes)
+- Category performance breakdown
+- Top performer identification
+
+## Social Media Clients (10 total)
+
+| Client | File | API |
+|--------|------|-----|
+| **NanoBanana** | `clients/nano_banana.py` | Image generation |
+| **Kling** | `clients/kling.py` | Video generation (Kling 3.0) |
+| **ElevenLabs** | `clients/elevenlabs.py` | Uzbek TTS |
+| **Instagram** | `clients/instagram.py` | Graph API (image, reel, carousel, story) |
+| **Twitter/X** | `clients/twitter.py` | v2 API (tweet, thread, media upload) |
+| **TikTok** | `clients/tiktok.py` | Content Posting API (video, photo) |
+| **YouTube** | `clients/youtube.py` | Data API v3 (Shorts upload) |
+| **Facebook** | `clients/facebook.py` | Graph API (text, photo, video, reel) |
+| **Telegram** | `clients/telegram_channel.py` | Bot API (message, photo, video, album) |
+| **LinkedIn** | `clients/linkedin.py` | Marketing API (text, image, article) |
+
 ## Deployment (Docker)
 
 ```bash
@@ -318,7 +395,7 @@ Recycle score = base 5.0 + engagement boost + reach + saves
 ```
 instagram-generator/
 ├── CLAUDE.md              # This file
-├── main.py                # CLI entry point (29 commands)
+├── main.py                # CLI entry point (35 commands)
 ├── config.py              # Settings via .env
 ├── scheduler.py           # Auto-posting scheduler
 ├── Makefile               # Build/dev/deploy shortcuts
@@ -336,11 +413,24 @@ instagram-generator/
 │   ├── lighting_artist.py # Lighting/art director agent
 │   ├── editor.py          # Editor agent
 │   └── quality_reviewer.py# Quality control agent
-├── clients/               # External API clients
+├── cms/                   # Content management system
+│   ├── content_manager.py # Full content lifecycle
+│   ├── cross_poster.py    # Multi-platform publishing + adaptation
+│   ├── publisher.py       # Rules-based routing engine
+│   ├── asset_library.py   # Media asset library with tagging
+│   ├── campaigns.py       # Campaign management
+│   └── analytics_aggregator.py  # Cross-platform analytics
+├── clients/               # Social media & API clients (10)
 │   ├── nano_banana.py     # Image generation
 │   ├── kling.py           # Video generation (Kling 3.0)
 │   ├── elevenlabs.py      # Uzbek TTS
-│   └── instagram.py       # Instagram Graph API
+│   ├── instagram.py       # Instagram Graph API
+│   ├── twitter.py         # Twitter/X v2 API
+│   ├── tiktok.py          # TikTok Content Posting API
+│   ├── youtube.py         # YouTube Data API (Shorts)
+│   ├── facebook.py        # Facebook Pages Graph API
+│   ├── telegram_channel.py# Telegram Bot API (channels)
+│   └── linkedin.py        # LinkedIn Marketing API
 ├── pipeline/              # Content generation pipeline
 │   ├── orchestrator.py    # End-to-end pipeline (with moderation + resilience)
 │   ├── queue.py           # Priority content queue
@@ -384,7 +474,8 @@ instagram-generator/
 │   ├── test_templates.py  # Template library tests
 │   ├── test_plugins.py    # Plugin system tests
 │   ├── test_media_validator.py  # Media validation tests
-│   └── test_auth.py       # Webhook auth tests
+│   ├── test_auth.py       # Webhook auth tests
+│   └── test_cms.py        # CMS + cross-poster + router + campaign tests
 └── utils/                 # Utilities
     ├── cdn.py             # S3/R2/MinIO/HTTP upload
     ├── media.py           # ffmpeg operations
@@ -420,7 +511,7 @@ python main.py doctor          # Check env, ffmpeg, API keys
 python main.py doctor --strict # Require all API keys
 ```
 
-## CLI commands (29 total)
+## CLI commands (35 total)
 
 ```bash
 # === Content Generation ===
@@ -516,6 +607,40 @@ python main.py plugins --load                                     # Discover + l
 # === Media Validation ===
 python main.py validate ./output/image.png --type image           # Validate image
 python main.py validate ./output/video.mp4 --type reel            # Validate video
+
+# === Content CMS ===
+python main.py content --create -t "Palov" -c recipe              # Create draft
+python main.py content --list                                     # List all content
+python main.py content --status draft                             # Filter by status
+python main.py content --search "palov"                           # Search content
+python main.py content --submit abc123                            # Submit for review
+python main.py content --approve abc123                           # Approve
+python main.py content --schedule-id abc123 --platforms "instagram,tiktok"
+python main.py content --archive abc123                           # Archive
+
+# === Cross-Posting ===
+python main.py crosspost --content-id abc123                      # Auto-route + publish
+python main.py crosspost --content-id abc123 -p "instagram,tiktok" # Specific platforms
+python main.py crosspost --rules                                  # View publishing rules
+python main.py crosspost --route --content-id abc123              # Preview routing
+
+# === Campaigns ===
+python main.py campaign --create --name "Navro'z 2026" --platforms "instagram,tiktok"
+python main.py campaign --list                                    # List campaigns
+python main.py campaign --complete abc123                         # Complete campaign
+python main.py campaign --pause abc123                            # Pause campaign
+
+# === Media Assets ===
+python main.py assets                                             # View asset library
+python main.py assets --add ./output/image.png --tags "recipe,palov"
+python main.py assets --search "palov"                            # Search assets
+python main.py assets --unused                                    # Find unused assets
+
+# === Cross-Platform Analytics ===
+python main.py report                                             # Full cross-platform report
+python main.py report --platforms                                 # Platform breakdown
+python main.py report --categories                                # Category breakdown
+python main.py report --top 5                                     # Top 5 performers
 ```
 
 ## Makefile

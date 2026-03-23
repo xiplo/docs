@@ -1083,5 +1083,245 @@ def validate(path: str, content_type: str):
         click.echo(f"    WARNING: {warn}")
 
 
+# =====================================================================
+# content command (CMS)
+# =====================================================================
+
+
+@cli.command()
+@click.option("--create", is_flag=True, help="Create new content item")
+@click.option("--list", "list_all", is_flag=True, help="List all content")
+@click.option("--status", "filter_status", default="", help="Filter by status")
+@click.option("--search", "query", default="", help="Search content")
+@click.option("--title", default="", help="Content title")
+@click.option("--topic", "-t", default="", help="Topic")
+@click.option("--category", "-c", default="", help="Category")
+@click.option("--type", "content_type", default="reel", help="Content type")
+@click.option("--submit", default="", help="Submit item for review (by ID)")
+@click.option("--approve", default="", help="Approve item (by ID)")
+@click.option("--schedule-id", default="", help="Schedule item (by ID)")
+@click.option("--platforms", default="", help="Target platforms (comma-separated)")
+@click.option("--archive", default="", help="Archive item (by ID)")
+def content(
+    create, list_all, filter_status, query, title, topic, category,
+    content_type, submit, approve, schedule_id, platforms, archive,
+):
+    """Content management system — full lifecycle."""
+    from cms.content_manager import ContentManager
+
+    cm = ContentManager()
+
+    if create:
+        item = cm.create(
+            title=title or topic,
+            topic=topic,
+            category=category,
+            content_type=content_type,
+        )
+        click.echo(f"  Created: {item.id} ({item.status})")
+    elif submit:
+        cm.submit_for_review(submit)
+        click.echo(f"  Submitted for review: {submit}")
+    elif approve:
+        cm.approve(approve)
+        click.echo(f"  Approved: {approve}")
+    elif schedule_id:
+        plats = [p.strip() for p in platforms.split(",")] if platforms else ["instagram"]
+        cm.schedule(schedule_id, datetime.now().isoformat(), plats)
+        click.echo(f"  Scheduled: {schedule_id} → {', '.join(plats)}")
+    elif archive:
+        cm.archive(archive)
+        click.echo(f"  Archived: {archive}")
+    elif query:
+        results = cm.search(query)
+        for r in results:
+            click.echo(f"  {r.id} [{r.status}] {r.title or r.topic}")
+    else:
+        click.echo(cm.display(status_filter=filter_status))
+
+
+# =====================================================================
+# crosspost command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--content-id", default="", help="CMS content ID to cross-post")
+@click.option("--platforms", "-p", default="", help="Platforms (comma-separated)")
+@click.option("--rules", is_flag=True, help="Show publishing rules")
+@click.option("--route", is_flag=True, help="Show platform routing for content")
+def crosspost(content_id, platforms, rules, route):
+    """Cross-post content to multiple social platforms."""
+    if rules:
+        from cms.publisher import PublishingRouter
+        router = PublishingRouter()
+        click.echo(router.display())
+        return
+
+    if route:
+        from cms.publisher import PublishingRouter
+        from cms.content_manager import ContentManager
+
+        router = PublishingRouter()
+        if content_id:
+            cm = ContentManager()
+            item = cm.get(content_id)
+            if item:
+                target = router.get_platforms({
+                    "content_type": item.content_type,
+                    "category": item.category,
+                    "campaign_id": item.campaign_id,
+                    "tags": item.tags,
+                })
+                click.echo(f"  Content {content_id} → {', '.join(target)}")
+            else:
+                click.echo(f"  Content {content_id} not found.", err=True)
+        return
+
+    if content_id:
+        from cms.content_manager import ContentManager
+        from cms.cross_poster import CrossPoster, PlatformAdapter
+        from cms.publisher import PublishingRouter
+
+        cm = ContentManager()
+        item = cm.get(content_id)
+        if not item:
+            click.echo(f"  Content {content_id} not found.", err=True)
+            return
+
+        if platforms:
+            plats = [p.strip() for p in platforms.split(",")]
+        else:
+            router = PublishingRouter()
+            plats = router.get_platforms({
+                "content_type": item.content_type,
+                "category": item.category,
+            })
+
+        click.echo(f"  Cross-posting {content_id} → {', '.join(plats)}")
+
+        async def _crosspost():
+            poster = CrossPoster()
+            try:
+                results = await poster.publish_multi(
+                    {
+                        "caption": item.caption,
+                        "hashtags": item.hashtags,
+                        "content_type": item.content_type,
+                        "cdn_urls": item.cdn_urls,
+                        "media_paths": item.media_paths,
+                        "voiceover_text": item.voiceover_text,
+                        "topic": item.topic,
+                    },
+                    plats,
+                )
+                for p, r in results.items():
+                    status = r.get("status", "?")
+                    click.echo(f"    {p}: {status}")
+                cm.mark_published(content_id, results)
+            finally:
+                await poster.close()
+
+        asyncio.run(_crosspost())
+    else:
+        click.echo("  Use --content-id to cross-post, --rules to view rules, --route to check routing.")
+
+
+# =====================================================================
+# campaign command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--create", is_flag=True, help="Create a campaign")
+@click.option("--name", default="", help="Campaign name")
+@click.option("--platforms", default="", help="Target platforms")
+@click.option("--list", "list_all", is_flag=True, help="List campaigns")
+@click.option("--complete", default="", help="Complete campaign (by ID)")
+@click.option("--pause", default="", help="Pause campaign (by ID)")
+def campaign(create, name, platforms, list_all, complete, pause):
+    """Manage content campaigns."""
+    from cms.campaigns import CampaignManager
+
+    mgr = CampaignManager()
+
+    if create:
+        plats = [p.strip() for p in platforms.split(",")] if platforms else []
+        c = mgr.create(name=name, target_platforms=plats)
+        click.echo(f"  Campaign created: {c.id} — {c.name}")
+    elif complete:
+        mgr.complete(complete)
+        click.echo(f"  Completed: {complete}")
+    elif pause:
+        mgr.pause(pause)
+        click.echo(f"  Paused: {pause}")
+    else:
+        click.echo(mgr.display())
+
+
+# =====================================================================
+# assets command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--add", "add_path", default="", help="Add file to library")
+@click.option("--tags", default="", help="Comma-separated tags")
+@click.option("--search", "query", default="", help="Search assets")
+@click.option("--unused", is_flag=True, help="Show unused assets")
+def assets(add_path, tags, query, unused):
+    """Manage media asset library."""
+    from cms.asset_library import AssetLibrary
+
+    lib = AssetLibrary()
+
+    if add_path:
+        tag_list = [t.strip() for t in tags.split(",")] if tags else []
+        asset = lib.add(file_path=add_path, tags=tag_list)
+        click.echo(f"  Added: {asset.id} ({asset.media_type}) {asset.name}")
+    elif query:
+        results = lib.search(query)
+        for a in results:
+            click.echo(f"  {a.id} [{a.media_type}] {a.name} ({', '.join(a.tags[:3])})")
+    elif unused:
+        results = lib.find_unused()
+        click.echo(f"  Unused assets: {len(results)}")
+        for a in results:
+            click.echo(f"    {a.id} {a.name}")
+    else:
+        click.echo(lib.display())
+
+
+# =====================================================================
+# report command (cross-platform analytics)
+# =====================================================================
+
+
+@cli.command()
+@click.option("--platforms", is_flag=True, help="Platform breakdown")
+@click.option("--categories", is_flag=True, help="Category breakdown")
+@click.option("--top", default=0, help="Show top N performers")
+def report(platforms, categories, top):
+    """Cross-platform analytics report."""
+    from cms.analytics_aggregator import AnalyticsAggregator
+
+    agg = AnalyticsAggregator()
+
+    if platforms:
+        summary = agg.get_platform_summary()
+        for p, s in sorted(summary.items(), key=lambda x: x[1]["impressions"], reverse=True):
+            click.echo(f"  {p:<12} posts={s['posts']}  reach={s['impressions']:,}  engagement={s['engagement']:,}")
+    elif categories:
+        cats = agg.get_category_performance()
+        for cat, data in sorted(cats.items(), key=lambda x: x[1]["total_engagement"], reverse=True):
+            click.echo(f"  {cat:<16} {data['posts']} posts  reach={data['total_impressions']:,}")
+    elif top:
+        best = agg.get_best_performing(top)
+        for entry in best:
+            click.echo(f"  {entry.content_id} eng={entry.total_engagement:,} best={entry.best_platform}")
+    else:
+        click.echo(agg.generate_report())
+
+
 if __name__ == "__main__":
     cli()
