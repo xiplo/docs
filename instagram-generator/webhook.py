@@ -93,6 +93,18 @@ async def start_webhook_server(port: int = 8080) -> None:
                 workflow = ApprovalWorkflow()
                 self._respond_text(200, workflow.display())
 
+            elif self.path == "/metrics":
+                from utils.metrics import metrics as m
+                self._respond_text(200, m.export_prometheus())
+
+            elif self.path == "/hashtags":
+                from skills.hashtags import HashtagResearch
+                self._respond_text(200, HashtagResearch.display())
+
+            elif self.path == "/library":
+                from templates.library import TemplateLibrary
+                self._respond_text(200, TemplateLibrary.display())
+
             else:
                 self._respond(404, {"error": "Not found"})
 

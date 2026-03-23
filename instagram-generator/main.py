@@ -901,5 +901,126 @@ def notify(test: bool, message: str):
         asyncio.run(_send())
 
 
+# =====================================================================
+# hashtags command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--category", "-c", default="", help="Category (motivational, recipe, travel, ...)")
+@click.option("--count", "-n", default=12, help="Number of hashtags to suggest")
+@click.option("--check", default="", help="Comma-separated tags to check for bans")
+def hashtags(category: str, count: int, check: str):
+    """Research and suggest optimal hashtags."""
+    from skills.hashtags import HashtagResearch
+
+    if check:
+        tags = [t.strip() for t in check.split(",")]
+        banned = HashtagResearch.check_banned(tags)
+        if banned:
+            click.echo(f"  Banned/risky hashtags: {', '.join(banned)}")
+        else:
+            click.echo("  All hashtags are safe.")
+        return
+
+    if category:
+        result = HashtagResearch.suggest(category, count=count)
+        click.echo(f"\n  Suggested for '{category}' ({result.total} tags):")
+        click.echo(f"  {result.as_string()}")
+        click.echo(f"\n  Breakdown: {result.broad_count} broad / {result.mid_count} mid / {result.niche_count} niche")
+        if result.banned_removed:
+            click.echo(f"  Removed: {', '.join(result.banned_removed)}")
+    else:
+        click.echo(HashtagResearch.display())
+
+
+# =====================================================================
+# backup command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--create", is_flag=True, help="Create a backup")
+@click.option("--restore", default="", help="Restore from backup name")
+@click.option("--label", "-l", default="", help="Label for backup")
+def backup(create: bool, restore: str, label: str):
+    """Backup and restore data files."""
+    from utils.backup import BackupManager
+
+    mgr = BackupManager()
+
+    if create:
+        path = mgr.create_backup(label=label)
+        click.echo(f"  Backup created: {path.name}")
+    elif restore:
+        count = mgr.restore_backup(restore)
+        if count:
+            click.echo(f"  Restored {count} files from '{restore}'")
+        else:
+            click.echo(f"  Backup '{restore}' not found.", err=True)
+    else:
+        click.echo(mgr.display())
+
+
+# =====================================================================
+# metrics command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--prometheus", is_flag=True, help="Export in Prometheus format")
+@click.option("--json", "as_json", is_flag=True, help="Export as JSON")
+def metrics(prometheus: bool, as_json: bool):
+    """View system metrics."""
+    from utils.metrics import metrics as m
+
+    if prometheus:
+        click.echo(m.export_prometheus())
+    elif as_json:
+        import json
+        click.echo(json.dumps(m.get_all(), indent=2))
+    else:
+        click.echo(m.display())
+
+
+# =====================================================================
+# library command
+# =====================================================================
+
+
+@cli.command()
+@click.option("--category", "-c", default="", help="Filter by category")
+@click.option("--use", default="", help="Use template by name (generate content)")
+def library(category: str, use: str):
+    """Browse and use pre-built content templates."""
+    from templates.library import TemplateLibrary
+
+    if use:
+        tmpl = TemplateLibrary.get_by_name(use)
+        if not tmpl:
+            click.echo(f"  Template '{use}' not found.", err=True)
+            return
+
+        rendered = tmpl.render()
+        click.echo(f"\n  Template: {tmpl.name}")
+        click.echo(f"  Topic: {rendered['topic']}")
+        click.echo(f"  Type: {rendered['content_type']}")
+        click.echo(f"  Caption: {rendered['caption'][:80]}...")
+        click.echo(f"  Hashtags: {', '.join(rendered['hashtags'])}")
+
+        if click.confirm("  Enqueue this for generation?"):
+            from pipeline.queue import ContentQueue
+            q = ContentQueue()
+            item = q.enqueue(
+                topic=rendered["topic"],
+                category=rendered["category"],
+                content_type=rendered["content_type"],
+                priority=7,
+            )
+            click.echo(f"  Queued: {item.id}")
+    else:
+        click.echo(TemplateLibrary.display(category))
+
+
 if __name__ == "__main__":
     cli()

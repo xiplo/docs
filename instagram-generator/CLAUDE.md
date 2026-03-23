@@ -147,6 +147,38 @@ Winner determined by composite score: `engagement_rate * 0.4 + reach * 0.3 + sav
 - **Log** — Always active as fallback
 - Auto-notifies on scheduler publish/fail events
 
+## Hashtag research
+
+`skills/hashtags.py` — Optimal hashtag selection:
+- 6 category pools (motivational, recipe, travel, lifestyle, education, fitness)
+- 3-tier strategy: broad (>1M), mid (100K-1M), niche (<100K)
+- Banned/shadowban hashtag detection (follow4follow, l4l, etc.)
+- Optimal count: 8-15 per post
+
+## Content template library
+
+`templates/library.py` — 11 pre-built content blueprints:
+- Categories: motivational, recipe, travel, lifestyle, education, fitness
+- Each template includes: caption, hashtags, voiceover, image prompt, style preset
+- Renderable with placeholder variables
+- Directly enqueueable from CLI
+
+## Data backup/restore
+
+`utils/backup.py` — Protect JSON data files:
+- Backs up 8 data files (queue, calendar, history, tests, insights, etc.)
+- Timestamped snapshots with manifests
+- Auto-backup before restore operations
+- Retention policy (keep last 10 backups)
+
+## Metrics
+
+`utils/metrics.py` — Lightweight Prometheus-compatible metrics:
+- Counters, gauges, histograms (thread-safe singleton)
+- Context manager timer for API latency
+- Prometheus text export (`/metrics` endpoint)
+- Human-readable display
+
 ## Token management
 
 `utils/token_refresh.py` — Instagram token lifecycle:
@@ -172,6 +204,9 @@ Winner determined by composite score: `engagement_rate * 0.4 + reach * 0.3 + sav
 | `/trigger/trends` | POST | Auto-enqueue trending topics |
 | `/review/approve/:id` | POST | Approve content for publishing |
 | `/review/reject/:id` | POST | Reject content |
+| `/metrics` | GET | Prometheus metrics export |
+| `/hashtags` | GET | Hashtag pools & suggestions |
+| `/library` | GET | Content template library |
 
 ## Deployment (Docker)
 
@@ -242,10 +277,11 @@ Recycle score = base 5.0 + engagement boost + reach + saves
 ```
 instagram-generator/
 ├── CLAUDE.md              # This file
-├── main.py                # CLI entry point (22 commands)
+├── main.py                # CLI entry point (26 commands)
 ├── config.py              # Settings via .env
 ├── scheduler.py           # Auto-posting scheduler
-├── webhook.py             # HTTP webhook server (12 endpoints)
+├── Makefile               # Build/dev/deploy shortcuts
+├── webhook.py             # HTTP webhook server (15 endpoints)
 ├── accounts.py            # Multi-account management
 ├── notifications.py       # Telegram/webhook/log notifications
 ├── Dockerfile             # Container image
@@ -276,14 +312,16 @@ instagram-generator/
 │   ├── audience.py        # Audience targeting
 │   ├── platform.py        # Instagram optimization
 │   ├── analytics.py       # Performance analytics
-│   └── moderation.py      # Content safety & cultural checks
+│   ├── moderation.py      # Content safety & cultural checks
+│   └── hashtags.py        # Hashtag research & banned detection
 ├── strategy/              # Content strategy
 │   ├── engine.py          # Strategy planner
 │   ├── calendar.py        # Content calendar
 │   ├── recycler.py        # Content recycling engine
 │   └── trends.py          # Trending topics & seasonal events
 ├── templates/             # Content templates
-│   └── prompts.py         # Template library
+│   ├── prompts.py         # Prompt templates
+│   └── library.py         # Pre-built content blueprints (11 templates)
 ├── tests/                 # Test suite (pytest)
 │   ├── conftest.py        # Fixtures + mocked clients
 │   ├── test_agents.py     # Agent system tests
@@ -295,7 +333,11 @@ instagram-generator/
 │   ├── test_trends.py     # Trends engine tests
 │   ├── test_pipeline.py   # Integration tests (mocked)
 │   ├── test_approval.py   # Approval workflow tests
-│   └── test_notifications.py  # Notification tests
+│   ├── test_notifications.py  # Notification tests
+│   ├── test_hashtags.py   # Hashtag research tests
+│   ├── test_backup.py     # Backup/restore tests
+│   ├── test_metrics.py    # Metrics collection tests
+│   └── test_templates.py  # Template library tests
 └── utils/                 # Utilities
     ├── cdn.py             # S3/R2/MinIO/HTTP upload
     ├── media.py           # ffmpeg operations
@@ -303,7 +345,9 @@ instagram-generator/
     ├── circuit_breaker.py # Circuit breaker pattern
     ├── startup.py         # Environment validation
     ├── logging.py         # Structured logging (dev/prod)
-    └── token_refresh.py   # Instagram token auto-refresh
+    ├── token_refresh.py   # Instagram token auto-refresh
+    ├── backup.py          # Data backup/restore
+    └── metrics.py         # Prometheus-compatible metrics
 ```
 
 ## Testing
@@ -326,7 +370,7 @@ python main.py doctor          # Check env, ffmpeg, API keys
 python main.py doctor --strict # Require all API keys
 ```
 
-## CLI commands (22 total)
+## CLI commands (26 total)
 
 ```bash
 # === Content Generation ===
@@ -391,6 +435,26 @@ python main.py token --refresh                                    # Force refres
 # === Notifications ===
 python main.py notify --test                                      # Send test notification
 python main.py notify -m "Custom message"                         # Send custom message
+
+# === Hashtag Research ===
+python main.py hashtags -c recipe                                 # Suggest hashtags
+python main.py hashtags -c motivational -n 15                     # 15 hashtags
+python main.py hashtags --check "follow4follow,success"           # Check for bans
+
+# === Data Backup ===
+python main.py backup --create -l "before_deploy"                 # Create backup
+python main.py backup --restore 20260323_120000_before_deploy     # Restore
+python main.py backup                                             # List backups
+
+# === Metrics ===
+python main.py metrics                                            # Human-readable
+python main.py metrics --prometheus                               # Prometheus format
+python main.py metrics --json                                     # JSON export
+
+# === Template Library ===
+python main.py library                                            # Browse all templates
+python main.py library -c recipe                                  # Filter by category
+python main.py library --use palov_recipe                         # Use + enqueue
 ```
 
 ## Makefile
