@@ -1547,5 +1547,84 @@ def ical(output, source):
     click.echo(f"  iCal exported: {path}")
 
 
+# =====================================================================
+# ai command (Claude-powered content generation)
+# =====================================================================
+
+
+@cli.command()
+@click.option("--caption", is_flag=True, help="Generate AI caption")
+@click.option("--script", is_flag=True, help="Generate AI video script")
+@click.option("--review", is_flag=True, help="AI quality review")
+@click.option("--translate", is_flag=True, help="AI translation")
+@click.option("--topic", "-t", default="", help="Topic")
+@click.option("--category", "-c", default="motivational", help="Category")
+@click.option("--text", default="", help="Text to translate/review")
+@click.option("--lang", default="ru", help="Target language")
+def ai(caption, script, review, translate, topic, category, text, lang):
+    """AI-powered content generation using Claude claude-sonnet-4-6."""
+    from skills.ai_content import AIContentGenerator
+    import json as _json
+
+    gen = AIContentGenerator()
+    if not gen.ai_enabled:
+        click.echo("  AI mode: FALLBACK (set ANTHROPIC_API_KEY for Claude claude-sonnet-4-6)")
+    else:
+        click.echo("  AI mode: Claude claude-sonnet-4-6")
+
+    async def _run():
+        try:
+            if caption:
+                result = await gen.generate_caption(topic or "Uzbek lifestyle", category)
+                click.echo(_json.dumps(result, indent=2, ensure_ascii=False))
+            elif script:
+                result = await gen.generate_script(topic or "Motivation", category)
+                click.echo(_json.dumps(result, indent=2, ensure_ascii=False))
+            elif review:
+                result = await gen.review_content(text or "Test caption", category=category)
+                click.echo(_json.dumps(result, indent=2, ensure_ascii=False))
+            elif translate:
+                result = await gen.translate(text or topic, target_lang=lang, category=category)
+                click.echo(_json.dumps(result, indent=2, ensure_ascii=False))
+            else:
+                click.echo("  Use --caption, --script, --review, or --translate")
+        finally:
+            await gen.close()
+
+    asyncio.run(_run())
+
+
+# =====================================================================
+# audience command (CRM)
+# =====================================================================
+
+
+@cli.command()
+@click.option("--segments", is_flag=True, help="Show audience segments")
+@click.option("--engagement", is_flag=True, help="Show engagement tracker")
+@click.option("--funnel", is_flag=True, help="Show follower funnel")
+@click.option("--for-content", default="", help="Find segments for category:type")
+def audience(segments, engagement, funnel, for_content):
+    """CRM — audience segments, engagement, funnel."""
+    if engagement:
+        from crm.engagement import EngagementTracker
+        click.echo(EngagementTracker().display())
+    elif funnel:
+        from crm.funnel import FollowerFunnel
+        click.echo(FollowerFunnel().display())
+    elif for_content:
+        from crm.audience import AudienceManager
+        parts = for_content.split(":")
+        cat = parts[0]
+        ct = parts[1] if len(parts) > 1 else "reel"
+        mgr = AudienceManager()
+        matches = mgr.get_for_content(cat, ct)
+        for s in matches:
+            click.echo(f"  {s.id:<16} {s.name:<22} {', '.join(s.active_platforms[:3])}")
+    else:
+        from crm.audience import AudienceManager
+        click.echo(AudienceManager().display())
+
+
 if __name__ == "__main__":
     cli()
