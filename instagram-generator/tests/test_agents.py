@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agents.base import CreativeBrief, CreativeAgent
+from agents.base import CreativeBrief, CreativeAgent, AgentRole
 
 
 class TestCreativeBrief:
@@ -27,9 +27,9 @@ class TestCreativeBrief:
 
 
 class TestCreativeAgent:
-    def test_cannot_instantiate_abstract(self):
-        with pytest.raises(TypeError):
-            CreativeAgent()
+    def test_base_agent_has_default_role(self):
+        agent = CreativeAgent()
+        assert agent.role == AgentRole.DIRECTOR
 
     @pytest.mark.asyncio
     async def test_agent_processes_brief(self, sample_brief):

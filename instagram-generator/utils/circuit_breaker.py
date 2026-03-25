@@ -54,6 +54,10 @@ class CircuitBreaker:
         async with self._lock:
             state = self.state
 
+            # Transition _state to HALF_OPEN when recovery timeout expires
+            if state == CircuitState.HALF_OPEN and self._state == CircuitState.OPEN:
+                self._state = CircuitState.HALF_OPEN
+
             if state == CircuitState.OPEN:
                 remaining = self.recovery_timeout - (time.monotonic() - self._last_failure_time)
                 logger.warning(

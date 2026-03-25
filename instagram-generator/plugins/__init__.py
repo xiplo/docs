@@ -55,7 +55,7 @@ class PluginRegistry:
     def register_hook(self, event: str, callback: Callable) -> None:
         """Register a callback for a pipeline event."""
         if event not in self._hooks:
-            logger.warning("plugin.unknown_event", event=event)
+            logger.warning("plugin.unknown_hook", hook_name=event)
             return
         self._hooks[event].append(callback)
 
@@ -77,7 +77,7 @@ class PluginRegistry:
             except Exception as exc:
                 logger.warning(
                     "plugin.hook_error",
-                    event=event,
+                    hook_event=event,
                     error=str(exc),
                 )
         return results

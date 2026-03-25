@@ -151,8 +151,8 @@ class PlatformAdapter:
             result.title = topic[:95] + " #Shorts" if topic else caption[:95] + " #Shorts"
         elif platform == "telegram":
             # Telegram uses inline hashtags
-            tag_line = " ".join(f"#{t}" for t in result.hashtags[:5])
-            if tag_line:
+            if result.hashtags:
+                tag_line = " ".join(f"#{t}" for t in result.hashtags[:5])
                 result.caption = f"{result.caption}\n\n{tag_line}"
         elif platform == "linkedin":
             # LinkedIn prefers professional tone
