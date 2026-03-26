@@ -1,0 +1,45 @@
+{
+  "id": "brix_03_conveyor_satisfying",
+  "topic": "Konveyer liniyasi — hipnotizlovchi harakat",
+  "category": "satisfying_machinery",
+  "content_type": "reel",
+  "duration_s": 5,
+  "aspect_ratio": "9:16",
+  "resolution": "1080x1920",
+  "video_model": "seedance-2-preview",
+  "image_model": "Qubico/flux1-dev",
+  "hook": "Buni ko'rib to'xtay olmaysiz! 😍",
+  "caption": "Buni ko'rib tuxtovsiz qarayman... 😍\n\nKonveyer liniyalari — BRIX.UZ\n\nBuyurtma: brix.uz\n\n#brixuz #conveyor #satisfying #warehouse #logistics",
+  "voiceover_text": "Mukammal tartib. Mukammal harakat. BRIX konveyer liniyalari — samaradorlik yangi darajada.",
+  "music_mood": "chill_satisfying",
+  "image_prompt": "Mesmerizing close-up of products moving along a modern conveyor belt system, perfectly organized boxes flowing smoothly, LED warehouse lights, symmetrical composition, 9:16 vertical, satisfying repetitive motion, clean industrial environment, orange accent lighting",
+  "video_prompt": "Hypnotic satisfying view of a conveyor sorting line in motion, boxes moving in perfect rhythm, camera following the flow, clean modern warehouse, smooth motion, 9:16 vertical, ASMR-like quality",
+  "hashtags": [
+    "brixuz",
+    "sanoatuskunalari",
+    "forklift",
+    "warehouse",
+    "madeinuzbekistan"
+  ],
+  "brand": "BRIX.UZ",
+  "brand_colors": [
+    "#1E3A5F",
+    "#FF6B00",
+    "#FFFFFF",
+    "#2D2D2D"
+  ],
+  "piapi_config": {
+    "flux": {
+      "model": "Qubico/flux1-dev",
+      "task_type": "txt2img",
+      "width": 1080,
+      "height": 1920
+    },
+    "seedance": {
+      "model": "seedance",
+      "task_type": "seedance-2-preview",
+      "duration": 5,
+      "aspect_ratio": "9:16"
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "id": "brix_08_client_success",
+  "topic": "Mijoz hikoyasi — samaradorlik 3 barobar oshdi",
+  "category": "client_stories",
+  "content_type": "reel",
+  "duration_s": 10,
+  "aspect_ratio": "9:16",
+  "resolution": "1080x1920",
+  "video_model": "seedance-2-preview",
+  "image_model": "Qubico/flux1-dev",
+  "hook": "Samaradorlik 3 barobar! Qanday qilib? 📈",
+  "caption": "Mijozimiz natijasi: samaradorlik 3 barobar oshdi! 📈\n\nBRIX uskunalari bilan ishlab chiqarish yangi darajaga chiqdi.\n\nSiz ham sinab ko'ring: brix.uz\n\n#brixuz #success #client #productivity #uzbekistan",
+  "voiceover_text": "Bizning mijoz aytadi: BRIX uskunalari bilan samaradorlik uch barobar oshdi. Siz ham sinab ko'ring.",
+  "music_mood": "success_inspiring",
+  "image_prompt": "Professional testimonial-style shot: satisfied factory manager standing proudly next to new BRIX equipment in a clean modern facility, before/after statistics overlay, warm professional lighting, 9:16 vertical, trust and success atmosphere",
+  "video_prompt": "Client success story video: factory manager speaks to camera, cut to equipment in action, overlay statistics showing 3x productivity increase, professional documentary style, 9:16 vertical, warm lighting",
+  "hashtags": [
+    "brixuz",
+    "sanoatuskunalari",
+    "forklift",
+    "warehouse",
+    "madeinuzbekistan"
+  ],
+  "brand": "BRIX.UZ",
+  "brand_colors": [
+    "#1E3A5F",
+    "#FF6B00",
+    "#FFFFFF",
+    "#2D2D2D"
+  ],
+  "piapi_config": {
+    "flux": {
+      "model": "Qubico/flux1-dev",
+      "task_type": "txt2img",
+      "width": 1080,
+      "height": 1920
+    },
+    "seedance": {
+      "model": "seedance",
+      "task_type": "seedance-2-preview",
+      "duration": 10,
+      "aspect_ratio": "9:16"
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "id": "brix_04_warehouse_transform",
+  "topic": "Ombor transformatsiyasi — oldin va keyin",
+  "category": "before_after",
+  "content_type": "reel",
+  "duration_s": 8,
+  "aspect_ratio": "9:16",
+  "resolution": "1080x1920",
+  "video_model": "seedance-2-preview",
+  "image_model": "Qubico/flux1-dev",
+  "hook": "Bu omborni tanimaysiz! 🤯",
+  "caption": "Oldin ↔ Keyin\n\nBRIX.UZ ombor yechimi bilan ishingiz tartibga tushadi!\n\nBepul maslahat: brix.uz\n\n#brixuz #warehouse #transformation #ombor #logistics",
+  "voiceover_text": "Oldin tartibsiz ombor. Keyin — BRIX yechimi. Siz ham omboringizni transformatsiya qiling.",
+  "music_mood": "reveal_dramatic",
+  "image_prompt": "Split screen showing warehouse transformation: left side chaotic messy warehouse with scattered boxes, right side perfectly organized modern warehouse with BRIX equipment, shelving systems, forklifts, clean floor, dramatic before-and-after, 9:16 vertical, professional lighting",
+  "video_prompt": "Dramatic warehouse transformation reveal, camera starts in a messy chaotic space, transition effect reveals the same space now perfectly organized with modern equipment, shelving systems, forklifts, clean lighting, 9:16 vertical, before and after",
+  "hashtags": [
+    "brixuz",
+    "sanoatuskunalari",
+    "forklift",
+    "warehouse",
+    "madeinuzbekistan"
+  ],
+  "brand": "BRIX.UZ",
+  "brand_colors": [
+    "#1E3A5F",
+    "#FF6B00",
+    "#FFFFFF",
+    "#2D2D2D"
+  ],
+  "piapi_config": {
+    "flux": {
+      "model": "Qubico/flux1-dev",
+      "task_type": "txt2img",
+      "width": 1080,
+      "height": 1920
+    },
+    "seedance": {
+      "model": "seedance",
+      "task_type": "seedance-2-preview",
+      "duration": 8,
+      "aspect_ratio": "9:16"
+    }
+  }
+}

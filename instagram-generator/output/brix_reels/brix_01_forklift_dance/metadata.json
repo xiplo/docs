@@ -1,0 +1,45 @@
+{
+  "id": "brix_01_forklift_dance",
+  "topic": "Forklift harakati — bir harakat, 2 tonna yuk!",
+  "category": "satisfying_machinery",
+  "content_type": "reel",
+  "duration_s": 5,
+  "aspect_ratio": "9:16",
+  "resolution": "1080x1920",
+  "video_model": "seedance-2-preview",
+  "image_model": "Qubico/flux1-dev",
+  "hook": "Ko'ring — 2 tonna bir soniyada! 😱",
+  "caption": "2 tonna yuk — bir harakat! 💪\n\nBRIX.UZ vilkali yuklagichlari — ishonchli va kuchli.\n\nBuyurtma uchun: brix.uz\n\n#brixuz #forklift #sanoat #warehouse #tashkent",
+  "voiceover_text": "Ikki tonna yuk. Bir harakat. BRIX vilkali yuklagichlari — ishingizni osonlashtiradi.",
+  "music_mood": "epic_industrial",
+  "image_prompt": "Cinematic close-up of a powerful orange forklift lifting a massive pallet of boxes in a modern warehouse, dramatic side lighting, industrial atmosphere, 9:16 vertical, machinery in motion, dust particles in light beams, ultra detailed, professional cinematography",
+  "video_prompt": "Smooth cinematic camera tracking a forklift as it lifts a heavy pallet, dramatic slow motion, industrial warehouse with sunbeams through windows, 9:16 vertical, professional quality, satisfying machinery movement",
+  "hashtags": [
+    "brixuz",
+    "sanoatuskunalari",
+    "forklift",
+    "warehouse",
+    "madeinuzbekistan"
+  ],
+  "brand": "BRIX.UZ",
+  "brand_colors": [
+    "#1E3A5F",
+    "#FF6B00",
+    "#FFFFFF",
+    "#2D2D2D"
+  ],
+  "piapi_config": {
+    "flux": {
+      "model": "Qubico/flux1-dev",
+      "task_type": "txt2img",
+      "width": 1080,
+      "height": 1920
+    },
+    "seedance": {
+      "model": "seedance",
+      "task_type": "seedance-2-preview",
+      "duration": 5,
+      "aspect_ratio": "9:16"
+    }
+  }
+}

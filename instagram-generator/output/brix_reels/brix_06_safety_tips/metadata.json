@@ -1,0 +1,45 @@
+{
+  "id": "brix_06_safety_tips",
+  "topic": "Omborxona xavfsizligi — 5 ta qoida",
+  "category": "safety_tips",
+  "content_type": "reel",
+  "duration_s": 10,
+  "aspect_ratio": "9:16",
+  "resolution": "1080x1920",
+  "video_model": "seedance-2-preview",
+  "image_model": "Qubico/flux1-dev",
+  "hook": "Bu qoidalarni bilmasangiz — xavfli! ⚠️",
+  "caption": "Omborxona xavfsizligi — 5 ta muhim qoida! ⚠️\n\n1. Himoya kiyimi\n2. Tezlik chegarasi\n3. Yuk ko'tarish qoidasi\n4. Yo'laklar toza\n5. Signal va ogohlantirish\n\nBRIX.UZ — xavfsiz ish muhiti\n\n#brixuz #safety #xavfsizlik #warehouse #tips",
+  "voiceover_text": "Omborxonada xavfsizlik — birinchi o'rinda! Besh ta muhim qoida. Birinchi: har doim himoya kiyimini kiying.",
+  "music_mood": "serious_educational",
+  "image_prompt": "Clean infographic-style image showing warehouse safety rules, worker wearing hard hat and safety vest, forklift with safety markings, warning signs, modern flat design elements overlaid on warehouse background, 9:16 vertical, educational, professional, orange and blue color scheme",
+  "video_prompt": "Educational video showing 5 warehouse safety rules, numbered countdown format, each rule demonstrated visually in a real warehouse setting, safety equipment close-ups, professional narration style, 9:16 vertical",
+  "hashtags": [
+    "brixuz",
+    "sanoatuskunalari",
+    "forklift",
+    "warehouse",
+    "madeinuzbekistan"
+  ],
+  "brand": "BRIX.UZ",
+  "brand_colors": [
+    "#1E3A5F",
+    "#FF6B00",
+    "#FFFFFF",
+    "#2D2D2D"
+  ],
+  "piapi_config": {
+    "flux": {
+      "model": "Qubico/flux1-dev",
+      "task_type": "txt2img",
+      "width": 1080,
+      "height": 1920
+    },
+    "seedance": {
+      "model": "seedance",
+      "task_type": "seedance-2-preview",
+      "duration": 10,
+      "aspect_ratio": "9:16"
+    }
+  }
+}

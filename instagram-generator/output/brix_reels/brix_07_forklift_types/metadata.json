@@ -1,0 +1,45 @@
+{
+  "id": "brix_07_forklift_types",
+  "topic": "Vilkali yuklagich turlari — qaysi biri sizga mos?",
+  "category": "educational",
+  "content_type": "reel",
+  "duration_s": 10,
+  "aspect_ratio": "9:16",
+  "resolution": "1080x1920",
+  "video_model": "seedance-2-preview",
+  "image_model": "Qubico/flux1-dev",
+  "hook": "Forkliftlar haqida nima bilasiz? 🤔",
+  "caption": "Qaysi forklift sizga kerak? 🤔\n\n🔋 Elektr stacker — tor joylar uchun\n🏗️ Counterbalance — og'ir yuklar\n🛒 Palet aravachasi — kundalik ish\n📦 Reach truck — baland javonlar\n\nMaslahat: brix.uz\n\n#brixuz #forklift #types #education #warehouse",
+  "voiceover_text": "Vilkali yuklagichning to'rt turi bor. Qaysi biri sizning omboringizga mos? Keling, birga ko'rib chiqamiz.",
+  "music_mood": "educational_upbeat",
+  "image_prompt": "Comparison showcase of different forklift types side by side: electric counterbalance, reach truck, pallet jack, order picker, each clearly labeled, warehouse background, professional product photography, 9:16 vertical, clean modern design",
+  "video_prompt": "Educational comparison of forklift types, camera moving from one to another, each type labeled with name and use case, professional product showcase style, modern warehouse, 9:16 vertical, smooth transitions",
+  "hashtags": [
+    "brixuz",
+    "sanoatuskunalari",
+    "forklift",
+    "warehouse",
+    "madeinuzbekistan"
+  ],
+  "brand": "BRIX.UZ",
+  "brand_colors": [
+    "#1E3A5F",
+    "#FF6B00",
+    "#FFFFFF",
+    "#2D2D2D"
+  ],
+  "piapi_config": {
+    "flux": {
+      "model": "Qubico/flux1-dev",
+      "task_type": "txt2img",
+      "width": 1080,
+      "height": 1920
+    },
+    "seedance": {
+      "model": "seedance",
+      "task_type": "seedance-2-preview",
+      "duration": 10,
+      "aspect_ratio": "9:16"
+    }
+  }
+}

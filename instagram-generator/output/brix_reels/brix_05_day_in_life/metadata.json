@@ -1,0 +1,45 @@
+{
+  "id": "brix_05_day_in_life",
+  "topic": "BRIX jamoasi kundalik ishlari",
+  "category": "behind_the_scenes",
+  "content_type": "reel",
+  "duration_s": 10,
+  "aspect_ratio": "9:16",
+  "resolution": "1080x1920",
+  "video_model": "seedance-2-preview",
+  "image_model": "Qubico/flux1-dev",
+  "hook": "BRIX jamoasi qanday ishlaydi? 👷",
+  "caption": "BRIX jamoasi bilan bir kun 🔧\n\nHar bir mashina ortida — professional jamoa bor.\n\nJamomizga qo'shiling: brix.uz\n\n#brixuz #team #behindthescenes #tashkent #work",
+  "voiceover_text": "Ertalab rejalashtirish. Uskunalarni tekshirish. O'rnatish. Mijozga topshirish. Bu BRIX jamoasining kundalik ishi.",
+  "music_mood": "uplifting_corporate",
+  "image_prompt": "Documentary-style photo of BRIX.UZ team members at work: engineers inspecting a new crane installation, warehouse manager checking inventory on tablet, technician calibrating a forklift, authentic natural lighting, 9:16 vertical, real people at work, professional yet approachable",
+  "video_prompt": "Day-in-the-life montage of industrial equipment team: morning briefing, equipment inspection, crane installation, forklift testing, customer handover, authentic documentary style, natural lighting, 9:16 vertical",
+  "hashtags": [
+    "brixuz",
+    "sanoatuskunalari",
+    "forklift",
+    "warehouse",
+    "madeinuzbekistan"
+  ],
+  "brand": "BRIX.UZ",
+  "brand_colors": [
+    "#1E3A5F",
+    "#FF6B00",
+    "#FFFFFF",
+    "#2D2D2D"
+  ],
+  "piapi_config": {
+    "flux": {
+      "model": "Qubico/flux1-dev",
+      "task_type": "txt2img",
+      "width": 1080,
+      "height": 1920
+    },
+    "seedance": {
+      "model": "seedance",
+      "task_type": "seedance-2-preview",
+      "duration": 10,
+      "aspect_ratio": "9:16"
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "id": "brix_02_crane_lift",
+  "topic": "Ko'prikli kran — yuqoridan ko'rish",
+  "category": "satisfying_machinery",
+  "content_type": "reel",
+  "duration_s": 8,
+  "aspect_ratio": "9:16",
+  "resolution": "1080x1920",
+  "video_model": "seedance-2-preview",
+  "image_model": "Qubico/flux1-dev",
+  "hook": "Bu kran nima ko'tara oladi? 👀",
+  "caption": "Ko'prikli kran — tonnalar havoda! 🏗️\n\nBRIX.UZ — har qanday og'irlikdagi yechim.\n\nMaslahat uchun: brix.uz\n\n#brixuz #crane #kran #sanoat #factory",
+  "voiceover_text": "Tonnalar havoda muallaq. Ko'prikli kranlar — BRIX sanoat yechimi. Batafsil: brix.uz",
+  "music_mood": "epic_cinematic",
+  "image_prompt": "Aerial drone view of an overhead bridge crane lifting a steel beam in a large factory hall, dramatic industrial lighting, sparks in background, blue and orange color scheme, 9:16 vertical, cinematic, power and precision",
+  "video_prompt": "Dramatic overhead crane lifting a massive steel beam, camera slowly rising from floor to ceiling revealing the entire factory, industrial scale, awe-inspiring, slow motion, 9:16 vertical",
+  "hashtags": [
+    "brixuz",
+    "sanoatuskunalari",
+    "forklift",
+    "warehouse",
+    "madeinuzbekistan"
+  ],
+  "brand": "BRIX.UZ",
+  "brand_colors": [
+    "#1E3A5F",
+    "#FF6B00",
+    "#FFFFFF",
+    "#2D2D2D"
+  ],
+  "piapi_config": {
+    "flux": {
+      "model": "Qubico/flux1-dev",
+      "task_type": "txt2img",
+      "width": 1080,
+      "height": 1920
+    },
+    "seedance": {
+      "model": "seedance",
+      "task_type": "seedance-2-preview",
+      "duration": 8,
+      "aspect_ratio": "9:16"
+    }
+  }
+}
