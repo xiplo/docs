@@ -166,3 +166,44 @@ def mock_media():
         merge.side_effect = fake_merge
         overlay.side_effect = fake_overlay
         yield {"merge": merge, "overlay": overlay}
+
+
+@pytest.fixture
+def mock_piapi():
+    """Mock PiAPI unified client."""
+    from clients.piapi import PiAPITaskResult
+
+    client = AsyncMock()
+    client.configured = True
+
+    # Flux image generation
+    client.flux_text_to_image.return_value = PiAPITaskResult(
+        task_id="flux_123",
+        status="completed",
+        model="Qubico/flux1-dev",
+        output={"image_url": "https://cdn.piapi.ai/flux/img_001.png"},
+    )
+
+    # Kling video generation
+    client.kling_image_to_video.return_value = PiAPITaskResult(
+        task_id="kling_456",
+        status="completed",
+        model="kling",
+        output={"works": [{"video": {"resource_without_watermark": "https://cdn.piapi.ai/kling/vid_001.mp4"}}]},
+    )
+    client.kling_text_to_video.return_value = PiAPITaskResult(
+        task_id="kling_789",
+        status="completed",
+        model="kling",
+        output={"works": [{"video": {"resource_without_watermark": "https://cdn.piapi.ai/kling/vid_002.mp4"}}]},
+    )
+
+    # Download
+    async def fake_download(url, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"\x00" * 100)
+        return path
+
+    client.download.side_effect = fake_download
+    client.close = AsyncMock()
+    return client
