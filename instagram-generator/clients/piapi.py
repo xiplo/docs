@@ -274,7 +274,7 @@ class PiAPIClient:
         return await self.run_task("kling", "video_generation", input_data, timeout=600)
 
     # ------------------------------------------------------------------
-    # Seedance 2.0 — Cinematic Video
+    # Seedance 2.0 — Cinematic Video (ByteDance)
     # ------------------------------------------------------------------
 
     async def seedance_text_to_video(
@@ -283,9 +283,13 @@ class PiAPIClient:
         duration: int = 5,
         aspect_ratio: str = "9:16",
     ) -> PiAPITaskResult:
-        """Generate cinematic video using Seedance 2.0."""
+        """Generate cinematic video using Seedance 2.0.
+
+        Best for: cinematic, ultra-realistic, immersive content.
+        Supports: text-to-video, image-to-video, video edit.
+        """
         return await self.run_task(
-            "seedance", "video_generation",
+            "seedance", "seedance-2-preview",
             {
                 "prompt": prompt,
                 "duration": duration,
@@ -299,15 +303,18 @@ class PiAPIClient:
         image_url: str,
         prompt: str = "",
         duration: int = 5,
+        aspect_ratio: str = "9:16",
     ) -> PiAPITaskResult:
         """Animate image with Seedance 2.0."""
+        input_data: dict = {
+            "prompt": prompt,
+            "image_urls": [image_url],
+            "duration": duration,
+            "aspect_ratio": aspect_ratio,
+        }
         return await self.run_task(
-            "seedance", "video_generation",
-            {
-                "image_url": image_url,
-                "prompt": prompt,
-                "duration": duration,
-            },
+            "seedance", "seedance-2-preview",
+            input_data,
             timeout=600,
         )
 

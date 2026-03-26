@@ -51,11 +51,13 @@ class ContentRequest:
     image_prompt: str
     caption: str
     voiceover_text: str = ""
-    image_style: str = "photorealistic"
+    image_style: str = "cinematic"
     video_duration: str = "5"
     subtitle_text: str = ""
     carousel_prompts: list[str] = field(default_factory=list)
     hashtags: list[str] = field(default_factory=list)
+    video_prompt: str = ""  # Explicit video prompt (overrides image_prompt for video)
+    video_model: str = "seedance"  # seedance, kling, veo3
 
 
 @dataclass
@@ -185,15 +187,37 @@ class ContentPipeline:
             with metrics.timer("cdn_upload_seconds"):
                 image_cdn_url = await upload_to_cdn(image_path)
 
-            # 3. Animate via Kling through PiAPI
-            with metrics.timer("api_latency_seconds", provider="piapi_kling"):
-                vid_result = await self.piapi.kling_image_to_video(
-                    image_url=image_cdn_url,
-                    prompt=req.image_prompt,
-                    duration=int(req.video_duration),
-                    aspect_ratio="9:16",
-                )
-            metrics.inc("api_calls_total", provider="piapi_kling")
+            # 3. Animate via selected video model (Seedance 2.0 default)
+            vid_prompt = req.video_prompt or req.image_prompt
+            video_model = req.video_model or "seedance"
+
+            if video_model == "seedance":
+                with metrics.timer("api_latency_seconds", provider="piapi_seedance"):
+                    vid_result = await self.piapi.seedance_image_to_video(
+                        image_url=image_cdn_url,
+                        prompt=vid_prompt,
+                        duration=int(req.video_duration),
+                        aspect_ratio="9:16",
+                    )
+                metrics.inc("api_calls_total", provider="piapi_seedance")
+            elif video_model == "veo3":
+                with metrics.timer("api_latency_seconds", provider="piapi_veo3"):
+                    vid_result = await self.piapi.veo3_image_to_video(
+                        image_url=image_cdn_url,
+                        prompt=vid_prompt,
+                        duration=int(req.video_duration),
+                        aspect_ratio="9:16",
+                    )
+                metrics.inc("api_calls_total", provider="piapi_veo3")
+            else:  # kling (default fallback)
+                with metrics.timer("api_latency_seconds", provider="piapi_kling"):
+                    vid_result = await self.piapi.kling_image_to_video(
+                        image_url=image_cdn_url,
+                        prompt=vid_prompt,
+                        duration=int(req.video_duration),
+                        aspect_ratio="9:16",
+                    )
+                metrics.inc("api_calls_total", provider="piapi_kling")
             video_url = vid_result.video_urls[0] if vid_result.video_urls else ""
             raw_video_path = run_dir / "raw_video.mp4"
             await self.piapi.download(video_url, raw_video_path)

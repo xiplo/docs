@@ -1626,5 +1626,98 @@ def audience(segments, engagement, funnel, for_content):
         click.echo(AudienceManager().display())
 
 
+# =====================================================================
+# brix command — BRIX.UZ content generation
+# =====================================================================
+
+
+@cli.command()
+@click.option("--list", "list_all", is_flag=True, help="List all BRIX content briefs")
+@click.option("--generate", "-g", default="", help="Generate specific brief by ID")
+@click.option("--category", "-c", default="", help="Filter by category")
+@click.option("--all", "gen_all", is_flag=True, help="Generate all briefs to queue")
+@click.option("--model", "-m", default="seedance", help="Video model: seedance, kling, veo3")
+@click.option("--dry-run", is_flag=True, help="Show what would be generated")
+def brix(list_all, generate, category, gen_all, model, dry_run):
+    """BRIX.UZ viral content generation — Seedance 2.0 vertical reels."""
+    from brands.brix_uz import get_all_briefs, get_brief_by_id, get_briefs_by_category, BrixBrandProfile
+
+    profile = BrixBrandProfile()
+    click.echo(f"\n  {profile.name} — {profile.tagline_uz}")
+    click.echo(f"  Video model: {model.upper()}")
+
+    if list_all or (not generate and not gen_all):
+        briefs = get_briefs_by_category(category) if category else get_all_briefs()
+        click.echo(f"\n  {len(briefs)} content briefs:")
+        for b in briefs:
+            click.echo(f"    {b['id']:<30} [{b['category']:<22}] {b['topic'][:40]}")
+        return
+
+    if generate:
+        brief_data = get_brief_by_id(generate)
+        if not brief_data:
+            click.echo(f"  Brief '{generate}' not found.", err=True)
+            return
+
+        click.echo(f"\n  Generating: {brief_data['topic']}")
+        click.echo(f"  Hook: {brief_data['hook']}")
+        click.echo(f"  Model: {model}")
+
+        if dry_run:
+            click.echo(f"\n  [DRY RUN] Would generate:")
+            click.echo(f"    Image: {brief_data['image_prompt'][:80]}...")
+            click.echo(f"    Video: {brief_data['video_prompt'][:80]}...")
+            click.echo(f"    Caption: {brief_data['caption_uz'][:80]}...")
+            return
+
+        from pipeline.orchestrator import ContentPipeline, ContentRequest
+
+        request = ContentRequest(
+            content_type="reel",
+            image_prompt=brief_data["image_prompt"],
+            caption=brief_data["caption_uz"],
+            voiceover_text=brief_data["voiceover_uz"],
+            video_duration=brief_data["duration"],
+            video_prompt=brief_data.get("video_prompt", ""),
+            video_model=model,
+            hashtags=profile.hashtags,
+        )
+
+        async def _run():
+            pipeline = ContentPipeline()
+            try:
+                result = await pipeline.run(request)
+                click.echo(f"\n  Status: {result.status}")
+                click.echo(f"  Request ID: {result.request_id}")
+                if result.cdn_urls:
+                    click.echo(f"  CDN: {result.cdn_urls[0]}")
+                if result.media_id:
+                    click.echo(f"  Media ID: {result.media_id}")
+                if result.error:
+                    click.echo(f"  Error: {result.error}")
+            finally:
+                await pipeline.close()
+
+        asyncio.run(_run())
+        return
+
+    if gen_all:
+        briefs = get_briefs_by_category(category) if category else get_all_briefs()
+        click.echo(f"\n  Enqueuing {len(briefs)} briefs...")
+
+        from pipeline.queue import ContentQueue
+        queue = ContentQueue()
+        for b in briefs:
+            item = queue.enqueue(
+                topic=b["topic"],
+                category=b["category"],
+                content_type="reel",
+                priority=8,
+            )
+            click.echo(f"    Queued: {item.id} — {b['topic'][:40]}")
+
+        click.echo(f"\n  Run 'python main.py batch --from-queue' to process all.")
+
+
 if __name__ == "__main__":
     cli()
