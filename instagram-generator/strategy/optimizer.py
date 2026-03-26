@@ -23,18 +23,21 @@ logger = structlog.get_logger(__name__)
 
 HISTORY_FILE = Path(settings.content_output_dir) / "post_history.json"
 
-# Default optimal posting times per platform (based on industry data)
+# Optimal posting times per platform — Tashkent timezone (2026 research-backed)
+# Uzbekistan peak: morning commute, lunch break, evening scroll
 DEFAULT_BEST_TIMES: dict[str, list[str]] = {
-    "instagram": ["09:00", "12:00", "17:00", "20:00"],
+    "instagram": ["09:00", "12:30", "18:00", "21:00"],
     "twitter": ["08:00", "12:00", "17:00", "21:00"],
     "tiktok": ["07:00", "10:00", "19:00", "22:00"],
     "youtube": ["12:00", "15:00", "18:00"],
     "facebook": ["09:00", "13:00", "16:00"],
     "telegram": ["08:00", "12:00", "18:00", "21:00"],
     "linkedin": ["07:30", "10:00", "12:00"],
+    "pinterest": ["12:00", "18:00", "21:00"],
+    "threads": ["09:00", "12:00", "18:00"],
 }
 
-# Default best days per platform
+# Best days per platform (2026 data)
 DEFAULT_BEST_DAYS: dict[str, list[str]] = {
     "instagram": ["Tuesday", "Wednesday", "Thursday"],
     "twitter": ["Monday", "Tuesday", "Wednesday"],
@@ -43,6 +46,8 @@ DEFAULT_BEST_DAYS: dict[str, list[str]] = {
     "facebook": ["Wednesday", "Thursday", "Friday"],
     "telegram": ["Monday", "Wednesday", "Friday"],
     "linkedin": ["Tuesday", "Wednesday", "Thursday"],
+    "pinterest": ["Saturday", "Sunday", "Friday"],
+    "threads": ["Tuesday", "Wednesday", "Thursday"],
 }
 
 

@@ -22,7 +22,7 @@ logger = structlog.get_logger(__name__)
 PLATFORM_SPECS: dict[str, dict] = {
     "instagram": {
         "caption_max": 2200,
-        "hashtag_max": 30,
+        "hashtag_max": 5,  # Dec 2025 algorithm change — caps at 5
         "video_max_s": 90,
         "image_formats": ["jpg", "png"],
         "video_formats": ["mp4", "mov"],
@@ -38,7 +38,7 @@ PLATFORM_SPECS: dict[str, dict] = {
     },
     "tiktok": {
         "caption_max": 2200,
-        "hashtag_max": 30,
+        "hashtag_max": 5,  # 2026: quality over quantity
         "video_max_s": 600,
         "image_formats": ["jpg", "png"],
         "video_formats": ["mp4"],
@@ -47,14 +47,14 @@ PLATFORM_SPECS: dict[str, dict] = {
     "youtube": {
         "title_max": 100,
         "description_max": 5000,
-        "hashtag_max": 15,
+        "hashtag_max": 5,
         "video_max_s": 60,  # Shorts limit
         "video_formats": ["mp4", "mov", "avi", "wmv"],
         "supports": ["short", "video"],
     },
     "facebook": {
         "caption_max": 63206,
-        "hashtag_max": 30,
+        "hashtag_max": 5,
         "video_max_s": 240,
         "image_formats": ["jpg", "png", "gif"],
         "video_formats": ["mp4", "mov"],
@@ -62,7 +62,7 @@ PLATFORM_SPECS: dict[str, dict] = {
     },
     "telegram": {
         "caption_max": 1024,
-        "hashtag_max": 0,
+        "hashtag_max": 5,
         "video_max_s": 0,  # No limit
         "image_formats": ["jpg", "png"],
         "video_formats": ["mp4"],

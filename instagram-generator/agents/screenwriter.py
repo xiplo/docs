@@ -186,12 +186,10 @@ class ScreenwriterAgent(CreativeAgent):
         ctas = CTA_TEMPLATES.get(cta_type, CTA_TEMPLATES["engagement"])
         return random.choice(ctas)
 
-    def _select_hashtags(self, category: str, count: int = 8) -> list[str]:
-        """Select 5-10 hashtags (2026 best practice: fewer, more relevant)."""
+    def _select_hashtags(self, category: str, count: int = 5) -> list[str]:
+        """Select 3-5 hashtags (2026: Instagram caps at 5, quality over quantity)."""
         pool = HASHTAG_POOLS.get(category, [])
-        general = ["instagram", "viral", "trending", "fyp"]
-        combined = pool + general
-        return random.sample(combined, min(count, len(combined)))
+        return random.sample(pool, min(count, len(pool)))
 
     def _generate_voiceover(self, brief: CreativeBrief) -> str:
         parts = [brief.hook_line]

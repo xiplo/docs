@@ -230,14 +230,20 @@ class PiAPIClient:
         mode: str = "std",
         negative_prompt: str = "",
         cfg_scale: float = 0.5,
+        version: str = "3.0",
     ) -> PiAPITaskResult:
-        """Generate video from text using Kling."""
+        """Generate video from text using Kling.
+
+        version: "1.0", "1.5", "2.0", "2.5", "3.0" (default: 3.0, best value 2026)
+        mode: "std" (standard) or "pro" (higher quality, 2x cost)
+        """
         input_data: dict = {
             "prompt": prompt,
             "duration": duration,
             "aspect_ratio": aspect_ratio,
             "mode": mode,
             "cfg_scale": cfg_scale,
+            "version": version,
         }
         if negative_prompt:
             input_data["negative_prompt"] = negative_prompt
@@ -251,14 +257,19 @@ class PiAPIClient:
         duration: int = 5,
         aspect_ratio: str = "9:16",
         mode: str = "std",
+        version: str = "3.0",
     ) -> PiAPITaskResult:
-        """Animate an image into video using Kling."""
+        """Animate an image into video using Kling.
+
+        Kling 3.0: Best motion quality at lowest cost (2026).
+        """
         input_data: dict = {
             "image_url": image_url,
             "prompt": prompt,
             "duration": duration,
             "aspect_ratio": aspect_ratio,
             "mode": mode,
+            "version": version,
         }
         return await self.run_task("kling", "video_generation", input_data, timeout=600)
 

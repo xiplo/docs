@@ -117,8 +117,8 @@ class HashtagSet:
 class HashtagResearch:
     """Research and suggest optimal hashtags."""
 
-    OPTIMAL_MIN = 8
-    OPTIMAL_MAX = 15
+    OPTIMAL_MIN = 3
+    OPTIMAL_MAX = 5  # 2026: Instagram caps at 5, all platforms favor fewer
 
     # Ratio: ~30% broad, ~40% mid, ~30% niche
     TIER_RATIOS = {"broad": 0.30, "mid": 0.40, "niche": 0.30}
