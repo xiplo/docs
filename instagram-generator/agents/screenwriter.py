@@ -1,12 +1,14 @@
-"""Screenwriter Agent (Сценарист) — writes scripts, captions, voiceover texts.
+"""Screenwriter Agent v2 — AI-powered scripts, captions, voiceover.
 
-The Screenwriter:
-  - Creates compelling scripts for video content (Reels)
-  - Writes Instagram captions optimized for engagement
-  - Generates voiceover text in Uzbek language
-  - Crafts hook lines (first 3 seconds attention grabber)
-  - Writes CTAs (Call-to-Action)
-  - Selects relevant hashtags
+Upgraded: Uses Claude claude-sonnet-4-6 for content generation when available.
+Falls back to template-based generation when API key is not set.
+
+Best practices (2026):
+  - Hook in first 1-2 seconds (question/bold statement)
+  - Optimal Reel length: 15-30s for engagement, 60-90s for watch time
+  - 3-5 hashtags per post (quality over quantity, 2026 algorithm shift)
+  - CTA must feel natural, not forced
+  - Uzbek caption with natural Russian/English code-switching
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ from .base import AgentRole, CreativeAgent, CreativeBrief
 logger = structlog.get_logger(__name__)
 
 # =====================================================================
-# Uzbek script templates and building blocks
+# Uzbek hook/CTA templates (fallback when AI not available)
 # =====================================================================
 
 HOOK_TEMPLATES = {
@@ -28,64 +30,40 @@ HOOK_TEMPLATES = {
         "Bugun hayotingizni o'zgartiring!",
         "Siz buni bilasizmi?",
         "Muvaffaqiyatning siri — bu...",
-        "Har kuni bu oddiy odatni bajaring...",
         "90% odamlar buni bilmaydi!",
+        "3 soniyada hayotingiz o'zgaradi...",
     ],
     "educational": [
-        "Bugun siz yangi narsa o'rganasiz!",
         "Bu 3 ta sir sizga kerak...",
         "Mutaxassislar shuni maslahat beradi...",
-        "Eng muhim qoida — bu...",
         "Ko'pchilik bu xatoni qiladi!",
+        "Buni bilmasangiz, kech bo'ladi...",
     ],
     "product": [
-        "Yangi mahsulot sizni kutmoqda!",
-        "Sifat va narx — bir joyda!",
         "Buni ko'rib hayron qolasiz!",
-        "Chegirma faqat bugun!",
+        "Sifat va narx — bir joyda!",
         "Eng ko'p sotilgan mahsulot!",
     ],
     "travel": [
         "Bu joyni ko'rganmisiz?",
-        "O'zbekistonning ajoyib joylari!",
+        "O'zbekistonning eng yashirin joyi!",
         "Bu manzarani ko'ring!",
-        "Sayohatga tayyormisiz?",
-        "Eng go'zal joy — bu...",
     ],
     "recipe": [
         "Eng mazali retsept!",
         "Buni sinab ko'ring — pushaymon bo'lmaysiz!",
-        "Oson va tez tayyorlanadi!",
         "Oilangiz bunga bayram qiladi!",
-        "Sir retsept ochiladi!",
-    ],
-    "fashion": [
-        "Bu uslub sizga mos keladi!",
-        "2024 yilning eng trendy ko'rinishi!",
-        "Shunchaki chiroyli!",
-        "Bu kombinatsiyani sinab ko'ring!",
-        "Moda dunyosidan yangilik!",
-    ],
-    "tech": [
-        "Bu texnologiya hayotingizni osonlashtiradi!",
-        "Yangi funksiya — sinab ko'ring!",
-        "Buni bilish sizga kerak!",
-        "Texnologiya yangiliklari!",
-        "Har bir dasturchi bilishi kerak!",
+        "5 daqiqada tayyorlanadi!",
     ],
     "lifestyle": [
         "Sog'lom turmush tarzi sirlari!",
         "Har kuni bu odatni bajaring!",
-        "Hayot sifatingizni oshiring!",
-        "Oddiy qadamlar — katta natijalar!",
         "Bugundan boshlang!",
     ],
-    "humor": [
-        "Kulib yuboring! 😂",
-        "Bu tanish vaziyat!",
-        "Hammaga bo'lgan!",
-        "Javob kommentlarda! 😄",
-        "Kim o'zini tanidi?",
+    "fitness": [
+        "10 daqiqada natija ko'ring!",
+        "Uy sharoitida mashq!",
+        "Tanangizni o'zgartiring!",
     ],
 }
 
@@ -93,107 +71,32 @@ CTA_TEMPLATES = {
     "engagement": [
         "Fikringizni kommentda yozing! 👇",
         "Do'stlaringizga ulashing! 📤",
-        "Saqlang va keyinroq o'qing! 🔖",
+        "Saqlang va keyinroq qarang! 🔖",
         "Like bosing agar foydali bo'lsa! ❤️",
-        "Qaysi biri yoqdi? Yozing! 💬",
-    ],
-    "sales": [
-        "Hoziroq buyurtma bering! 📩",
-        "DM yozing — batafsil ma'lumot beramiz!",
-        "Bio'dagi linkga o'ting! 🔗",
-        "Chegirma kodi: INSTAGRAM20 🎁",
-        "O'lchov va ranglarni DM'da so'rang!",
     ],
     "follow": [
         "Obuna bo'ling — ko'proq foydali kontent! 🔔",
         "Follow qiling, yangiliklar o'tkazib yubormang!",
-        "Biz bilan birga o'sib boring! 📈",
+    ],
+    "sales": [
+        "Hoziroq buyurtma bering! 📩",
+        "Bio'dagi linkga o'ting! 🔗",
     ],
 }
 
 HASHTAG_POOLS = {
-    "motivational": [
-        "motivation", "motivatsiya", "uzbek", "success", "muvaffaqiyat",
-        "hustle", "mindset", "tafakkur", "o'zbekiston", "tashkent",
-        "inspiringquotes", "ilhom", "hayot", "maqsad", "kuch",
-    ],
-    "educational": [
-        "education", "ta'lim", "o'rganish", "tips", "maslahat",
-        "bilim", "fan", "texnologiya", "dasturlash", "coding",
-    ],
-    "product": [
-        "newproduct", "shopping", "onlineshop", "tashkentshopping",
-        "sifat", "yangi", "chegirma", "sale", "madeinuzbekistan",
-    ],
-    "travel": [
-        "uzbekistan", "travel", "sayohat", "samarkand", "bukhara",
-        "khiva", "tashkent", "centralasia", "tourism", "heritage",
-    ],
-    "recipe": [
-        "uzbekfood", "recipe", "retsept", "plov", "oshpaz",
-        "cooking", "taom", "milliyovqat", "foodie", "homecooking",
-    ],
-    "fashion": [
-        "fashion", "moda", "style", "uslub", "ootd",
-        "uzbekfashion", "atlas", "adras", "trend", "lookbook",
-    ],
-    "tech": [
-        "tech", "technology", "coding", "dasturlash", "uzbekdev",
-        "programming", "startup", "innovation", "ai", "digital",
-    ],
-    "lifestyle": [
-        "lifestyle", "hayottarzi", "healthy", "sog'lom", "wellness",
-        "selfcare", "positivevibes", "routine", "habits", "growth",
-    ],
-    "humor": [
-        "humor", "kulgili", "funny", "meme", "uzbekhumor",
-        "comedy", "kulgu", "fun", "relatable", "lol",
-    ],
-}
-
-# Caption structure templates
-CAPTION_STRUCTURES = {
-    "reel": {
-        "motivational": (
-            "{hook}\n\n"
-            "{body}\n\n"
-            "{cta}\n\n"
-            "—\n{hashtags}"
-        ),
-        "educational": (
-            "{hook}\n\n"
-            "{body}\n\n"
-            "💡 Saqlang va do'stlaringizga ulashing!\n\n"
-            "{cta}\n\n"
-            "—\n{hashtags}"
-        ),
-        "default": (
-            "{hook}\n\n"
-            "{body}\n\n"
-            "{cta}\n\n"
-            "—\n{hashtags}"
-        ),
-    },
-    "carousel": {
-        "default": (
-            "{hook}\n\n"
-            "{body}\n\n"
-            "➡️ Chapga surting ko'proq o'qish uchun!\n\n"
-            "{cta}\n\n"
-            "—\n{hashtags}"
-        ),
-    },
-    "image": {
-        "default": "{hook}\n\n{body}\n\n{cta}\n\n—\n{hashtags}",
-    },
-    "story": {
-        "default": "",
-    },
+    "motivational": ["motivation", "motivatsiya", "muvaffaqiyat", "mehnat", "success", "mindset", "uzbekistan"],
+    "educational": ["education", "talim", "bilim", "tips", "coding", "uzbekdev"],
+    "product": ["shopping", "onlineshop", "chegirma", "sale", "madeinuzbekistan"],
+    "travel": ["uzbekistan", "travel", "sayohat", "samarkand", "bukhara", "silkroad"],
+    "recipe": ["uzbekfood", "retsept", "plov", "taom", "oshpaz", "homecooking"],
+    "lifestyle": ["lifestyle", "hayottarzi", "soglomhayot", "wellness", "routine"],
+    "fitness": ["fitness", "workout", "sport", "soglomhayot", "mashqlar"],
 }
 
 
 class ScreenwriterAgent(CreativeAgent):
-    """Writes scripts, captions, and voiceover for Uzbek Instagram content."""
+    """Writes scripts, captions, and voiceover — AI-first with rule fallback."""
 
     role = AgentRole.SCREENWRITER
 
@@ -202,29 +105,32 @@ class ScreenwriterAgent(CreativeAgent):
             "screenwriter.process",
             topic=brief.topic,
             category=brief.category,
-            content_type=brief.content_type,
         )
 
-        # 1. Generate hook line
-        brief.hook_line = self._generate_hook(brief.category)
+        # Try AI generation first
+        ai_result = await self._try_ai_generation(brief)
 
-        # 2. Generate CTA
-        cta_type = "sales" if brief.category == "product" else "engagement"
-        brief.cta = self._generate_cta(cta_type)
-
-        # 3. Generate hashtags
-        brief.hashtags = self._select_hashtags(brief.category)
-
-        # 4. Generate voiceover script (for reels)
-        if brief.content_type == "reel":
-            brief.voiceover_text = self._generate_voiceover(brief)
-
-        # 5. Generate caption
-        brief.caption = self._generate_caption(brief)
-
-        # 6. Generate script outline (scene descriptions)
-        if brief.content_type == "reel":
-            brief.script = self._generate_script(brief)
+        if ai_result:
+            brief.hook_line = ai_result.get("hook", "")
+            brief.cta = ai_result.get("cta", "")
+            brief.caption = ai_result.get("full_caption", "")
+            brief.hashtags = ai_result.get("hashtags", [])
+            brief.voiceover_text = ai_result.get("voiceover_text", "")
+            if ai_result.get("script"):
+                brief.script = ai_result["script"]
+            logger.info("screenwriter.ai_generated")
+        else:
+            # Fallback to templates
+            brief.hook_line = self._generate_hook(brief.category)
+            cta_type = "sales" if brief.category == "product" else "engagement"
+            brief.cta = self._generate_cta(cta_type)
+            brief.hashtags = self._select_hashtags(brief.category)
+            if brief.content_type == "reel":
+                brief.voiceover_text = self._generate_voiceover(brief)
+            brief.caption = self._generate_caption(brief)
+            if brief.content_type == "reel":
+                brief.script = self._generate_script(brief)
+            logger.info("screenwriter.template_generated")
 
         self.send_message(
             AgentRole.PROMPT_ENGINEER,
@@ -235,6 +141,43 @@ class ScreenwriterAgent(CreativeAgent):
 
         return brief
 
+    async def _try_ai_generation(self, brief: CreativeBrief) -> dict | None:
+        """Try generating content with Claude AI."""
+        try:
+            from skills.ai_content import AIContentGenerator
+
+            gen = AIContentGenerator()
+            if not gen.ai_enabled:
+                return None
+
+            # Generate caption + hashtags
+            caption_result = await gen.generate_caption(
+                topic=brief.topic,
+                category=brief.category,
+                content_type=brief.content_type,
+                tone=brief.brand_voice.split(",")[0].strip() if brief.brand_voice else "engaging",
+            )
+
+            result = dict(caption_result)
+
+            # Generate script for reels
+            if brief.content_type == "reel":
+                script_result = await gen.generate_script(
+                    topic=brief.topic,
+                    category=brief.category,
+                    duration=brief.duration,
+                    style=brief.style_preset,
+                )
+                result["voiceover_text"] = script_result.get("voiceover_text", "")
+                result["script"] = str(script_result.get("scenes", ""))
+
+            await gen.close()
+            return result
+
+        except Exception as exc:
+            logger.warning("screenwriter.ai_failed", error=str(exc))
+            return None
+
     def _generate_hook(self, category: str) -> str:
         hooks = HOOK_TEMPLATES.get(category, HOOK_TEMPLATES["motivational"])
         return random.choice(hooks)
@@ -243,82 +186,42 @@ class ScreenwriterAgent(CreativeAgent):
         ctas = CTA_TEMPLATES.get(cta_type, CTA_TEMPLATES["engagement"])
         return random.choice(ctas)
 
-    def _select_hashtags(self, category: str, count: int = 15) -> list[str]:
+    def _select_hashtags(self, category: str, count: int = 8) -> list[str]:
+        """Select 5-10 hashtags (2026 best practice: fewer, more relevant)."""
         pool = HASHTAG_POOLS.get(category, [])
-        # Mix category-specific + general
-        general = ["instagram", "viral", "trending", "explore", "fyp"]
+        general = ["instagram", "viral", "trending", "fyp"]
         combined = pool + general
-        selected = random.sample(combined, min(count, len(combined)))
-        return selected
+        return random.sample(combined, min(count, len(combined)))
 
     def _generate_voiceover(self, brief: CreativeBrief) -> str:
-        """Generate a voiceover script based on topic and category."""
-        # Structure: Hook → Body → CTA
         parts = [brief.hook_line]
-
-        # Body — varies by category
         body_templates = {
-            "motivational": (
-                f"{brief.topic}. "
-                "Har bir qadam sizni maqsadingizga yaqinlashtiradi. "
-                "Ishoning va harakat qiling!"
-            ),
-            "educational": (
-                f"Bugun biz {brief.topic} haqida gaplashamiz. "
-                "Diqqat bilan eshiting — bu juda muhim ma'lumot."
-            ),
-            "product": (
-                f"Yangi {brief.topic} sizni kutmoqda! "
-                "Sifat, dizayn va arzon narx — barchasi bir joyda."
-            ),
-            "travel": (
-                f"{brief.topic} — bu ajoyib joy. "
-                "Tarixiy me'morchilik va go'zal manzaralar sizni kutmoqda."
-            ),
-            "recipe": (
-                f"Bugun biz {brief.topic} tayyorlaymiz. "
-                "Retseptni saqlang va uyda sinab ko'ring!"
-            ),
+            "motivational": f"{brief.topic}. Har bir qadam sizni maqsadingizga yaqinlashtiradi. Ishoning va harakat qiling!",
+            "educational": f"Bugun biz {brief.topic} haqida gaplashamiz. Diqqat bilan eshiting — bu juda muhim ma'lumot.",
+            "recipe": f"Bugun biz {brief.topic} tayyorlaymiz. Retseptni saqlang va uyda sinab ko'ring!",
+            "travel": f"{brief.topic} — bu ajoyib joy. Tarixiy me'morchilik va go'zal manzaralar sizni kutmoqda.",
         }
-        body = body_templates.get(
-            brief.category,
-            f"{brief.topic} haqida bilib oling!",
-        )
+        body = body_templates.get(brief.category, f"{brief.topic} haqida bilib oling!")
         parts.append(body)
-
         return " ".join(parts)
 
     def _generate_caption(self, brief: CreativeBrief) -> str:
-        """Assemble the final caption from components."""
-        structure = (
-            CAPTION_STRUCTURES
-            .get(brief.content_type, {})
-            .get(brief.category, CAPTION_STRUCTURES.get(brief.content_type, {}).get("default", "{body}"))
-        )
-
-        hashtag_str = " ".join(f"#{h}" for h in brief.hashtags)
-
-        return structure.format(
-            hook=brief.hook_line,
-            body=brief.voiceover_text or brief.topic,
-            cta=brief.cta,
-            hashtags=hashtag_str,
-        )
+        hashtag_str = " ".join(f"#{h}" for h in brief.hashtags[:8])
+        return f"{brief.hook_line}\n\n{brief.voiceover_text or brief.topic}\n\n{brief.cta}\n\n—\n{hashtag_str}"
 
     def _generate_script(self, brief: CreativeBrief) -> str:
-        """Generate a scene-by-scene script outline."""
-        if brief.duration == "5":
+        dur = int(brief.duration)
+        if dur <= 5:
             return (
                 f"[0-1s] HOOK: {brief.hook_line}\n"
                 f"[1-3s] MAIN: Visual reveal — {brief.topic}\n"
                 f"[3-4s] DETAIL: Close-up / key moment\n"
                 f"[4-5s] CTA: {brief.cta}\n"
             )
-        else:  # 10s
-            return (
-                f"[0-2s] HOOK: {brief.hook_line}\n"
-                f"[2-4s] ESTABLISH: Wide shot — {brief.topic}\n"
-                f"[4-6s] DEVELOP: Detail shots, dynamic movement\n"
-                f"[6-8s] CLIMAX: Key reveal / emotional peak\n"
-                f"[8-10s] CTA: {brief.cta}\n"
-            )
+        return (
+            f"[0-2s] HOOK: {brief.hook_line}\n"
+            f"[2-4s] ESTABLISH: Wide shot — {brief.topic}\n"
+            f"[4-6s] DEVELOP: Detail shots, dynamic movement\n"
+            f"[6-8s] CLIMAX: Key reveal / emotional peak\n"
+            f"[8-{dur}s] CTA: {brief.cta}\n"
+        )

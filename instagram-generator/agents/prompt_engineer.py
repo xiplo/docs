@@ -1,11 +1,15 @@
-"""Prompt Engineer Agent (Промт-инженер) — crafts optimized prompts for AI models.
+"""Prompt Engineer Agent v2 — optimized for Flux + Kling 2.5 via PiAPI.
 
-The Prompt Engineer:
-  - Translates the Director's vision into precise AI model prompts
-  - Optimizes prompts for Nano Banana (image gen) and Kling 3.0 (video gen)
-  - Manages negative prompts to avoid common artifacts
-  - Adapts prompt style based on the target model
-  - Handles carousel slide prompt consistency
+Upgraded for 2026 models:
+  - Flux (flux1-dev): Natural language prompts, no token weighting needed
+  - Kling 2.5: Motion-focused prompts, camera control directives
+  - Seedance 2.0: Cinematic video descriptions
+  - Negative prompts simplified (Flux handles them internally)
+
+Best practices (2026):
+  - Flux: Descriptive sentences > keyword lists
+  - Kling 2.5: Explicit motion + camera + timing cues
+  - 9:16 vertical for Reels/TikTok/Shorts
 """
 
 from __future__ import annotations
@@ -16,10 +20,6 @@ from .base import AgentRole, CreativeAgent, CreativeBrief
 
 logger = structlog.get_logger(__name__)
 
-# =====================================================================
-# Prompt engineering building blocks
-# =====================================================================
-
 QUALITY_BOOSTERS = [
     "ultra detailed", "high resolution", "professional photography",
     "sharp focus", "masterpiece", "best quality",
@@ -29,18 +29,17 @@ NEGATIVE_PROMPTS = {
     "universal": (
         "blurry, low quality, watermark, text, logo, banner, "
         "deformed, disfigured, bad anatomy, extra limbs, "
-        "duplicate, morbid, mutilated, poorly drawn, "
-        "ugly, distorted, oversaturated, underexposed"
+        "duplicate, ugly, distorted, oversaturated"
     ),
     "food": (
         "blurry, low quality, watermark, text, logo, "
-        "unappetizing, moldy, burnt, raw, undercooked, "
-        "dirty plate, messy background, artificial looking"
+        "unappetizing, moldy, burnt, artificial looking, "
+        "dirty plate, messy background"
     ),
     "portrait": (
         "blurry, low quality, watermark, text, logo, "
         "deformed face, bad anatomy, extra fingers, "
-        "cross-eyed, distorted features, uncanny valley"
+        "cross-eyed, distorted features"
     ),
     "landscape": (
         "blurry, low quality, watermark, text, logo, "
@@ -49,52 +48,46 @@ NEGATIVE_PROMPTS = {
     ),
 }
 
-STYLE_MODIFIERS = {
-    "photorealistic": {
-        "prefix": "RAW photo, ",
-        "suffix": ", DSLR, 35mm film, natural lighting, depth of field",
-        "negative_extra": "cartoon, anime, illustration, painting, drawing",
-    },
-    "illustration": {
-        "prefix": "Digital illustration, ",
-        "suffix": ", trending on Artstation, highly detailed illustration",
-        "negative_extra": "photograph, photo, realistic, 3d render",
-    },
-    "3d_render": {
-        "prefix": "3D render, ",
-        "suffix": ", octane render, cinema 4D, subsurface scattering, volumetric lighting",
-        "negative_extra": "flat, 2d, photograph, sketch",
-    },
+# Flux-optimized style presets (natural language, 2026)
+FLUX_STYLES = {
     "cinematic": {
-        "prefix": "Cinematic still, ",
-        "suffix": ", anamorphic lens, film grain, color graded, dramatic lighting",
-        "negative_extra": "amateur, low budget, flat lighting",
+        "prefix": "Cinematic still frame, film grain, anamorphic lens, ",
+        "suffix": ", dramatic lighting, color graded, shallow depth of field, 35mm film look",
     },
-    "anime": {
-        "prefix": "Anime style, ",
-        "suffix": ", Studio Ghibli inspired, beautiful detailed eyes, vibrant colors",
-        "negative_extra": "realistic, photograph, 3d",
+    "photorealistic": {
+        "prefix": "RAW photograph, DSLR, ",
+        "suffix": ", natural lighting, depth of field, sharp focus, professional photography",
+    },
+    "editorial": {
+        "prefix": "Editorial magazine photograph, high fashion, ",
+        "suffix": ", studio lighting, clean composition, Vogue style",
+    },
+    "aerial": {
+        "prefix": "Aerial drone photograph, bird's eye view, ",
+        "suffix": ", wide angle, golden hour, epic scale, DJI quality",
+    },
+    "food_photo": {
+        "prefix": "Professional food photography, overhead flat lay, ",
+        "suffix": ", appetizing, steam rising, rustic wooden table, natural window light",
     },
     "flat_design": {
-        "prefix": "Modern flat design, ",
-        "suffix": ", clean vectors, minimalist, bold colors, UI design",
-        "negative_extra": "realistic, photograph, 3d, gradient",
+        "prefix": "Modern flat design illustration, clean vectors, ",
+        "suffix": ", minimalist, bold colors, geometric shapes, UI design",
     },
-    "watercolor": {
-        "prefix": "Watercolor painting, ",
-        "suffix": ", soft washes, wet on wet technique, artistic, delicate",
-        "negative_extra": "digital, photograph, sharp lines",
+    "artistic": {
+        "prefix": "Digital art, trending on Artstation, ",
+        "suffix": ", vibrant colors, highly detailed, concept art quality",
     },
 }
 
-# Category-specific visual keywords
+# Category-specific visual prompts for Uzbekistan
 CATEGORY_VISUALS = {
     "motivational": [
         "dramatic lighting", "golden hour", "epic scale",
         "inspirational atmosphere", "hero shot",
     ],
     "educational": [
-        "clean layout", "organized composition", "infographic style",
+        "clean layout", "organized", "infographic style",
         "clear visual hierarchy", "modern design",
     ],
     "product": [
@@ -103,54 +96,41 @@ CATEGORY_VISUALS = {
     ],
     "travel": [
         "drone photography", "wide angle", "panoramic",
-        "golden hour", "epic landscape", "aerial view",
+        "golden hour", "Silk Road architecture", "turquoise mosaic",
     ],
     "recipe": [
         "food photography", "overhead shot", "rustic table",
         "steam rising", "fresh ingredients", "appetizing",
     ],
-    "fashion": [
-        "editorial photography", "studio shot", "fashion magazine",
-        "high fashion", "elegant lighting", "model pose",
-    ],
-    "tech": [
-        "futuristic", "neon glow", "dark theme",
-        "holographic", "tech aesthetic", "modern workspace",
-    ],
     "lifestyle": [
         "natural light", "cozy atmosphere", "candid moment",
-        "warm tones", "authentic feel", "lifestyle photography",
+        "warm tones", "authentic feel",
+    ],
+    "fitness": [
+        "dynamic action shot", "gym lighting",
+        "energetic movement", "athletic pose",
     ],
 }
 
-# Uzbekistan-specific visual elements
 UZBEK_VISUAL_ELEMENTS = {
     "architecture": [
         "Registan square Samarkand", "Kalyan minaret Bukhara",
-        "Ichan-Kala Khiva", "Tashkent TV tower",
-        "Amir Timur square", "Chorsu bazaar",
-        "Islamic geometric patterns", "turquoise mosaic tilework",
+        "Ichan-Kala Khiva", "Tashkent City Park",
+        "turquoise mosaic tilework", "Islamic geometric patterns",
+    ],
+    "food": [
+        "Uzbek plov in kazan", "samsa from tandoor",
+        "fresh Uzbek non bread", "chaikhana tea house",
     ],
     "nature": [
         "Chimgan mountains", "Charvak lake",
         "Kyzylkum desert sunset", "Fergana valley",
-        "Tian Shan mountains", "cotton fields",
-    ],
-    "culture": [
-        "Uzbek suzani embroidery", "atlas ikat fabric",
-        "traditional doppi hat", "Uzbek ceramics",
-        "silk road marketplace", "Uzbek tea ceremony",
-    ],
-    "food": [
-        "Uzbek plov in kazan", "samsa from tandoor",
-        "shashlik on mangal", "fresh Uzbek bread non",
-        "chaikhana tea house", "Uzbek dried fruits",
     ],
 }
 
 
 class PromptEngineerAgent(CreativeAgent):
-    """Crafts optimized prompts for AI image and video generation."""
+    """Crafts optimized prompts for Flux (images) and Kling 2.5 (video)."""
 
     role = AgentRole.PROMPT_ENGINEER
 
@@ -159,20 +139,14 @@ class PromptEngineerAgent(CreativeAgent):
             "prompt_engineer.process",
             content_type=brief.content_type,
             style=brief.style_preset,
-            category=brief.category,
         )
 
-        # 1. Build the main image prompt
         brief.image_prompt = self._build_image_prompt(brief)
-
-        # 2. Build negative prompt
         brief.negative_prompt = self._build_negative_prompt(brief)
 
-        # 3. Build video prompt if needed
         if brief.content_type == "reel":
             brief.video_prompt = self._build_video_prompt(brief)
 
-        # 4. Build carousel prompts if needed
         if brief.content_type == "carousel":
             brief.carousel_prompts = self._build_carousel_prompts(brief)
 
@@ -186,22 +160,22 @@ class PromptEngineerAgent(CreativeAgent):
         return brief
 
     def _build_image_prompt(self, brief: CreativeBrief) -> str:
-        """Assemble an optimized image generation prompt."""
+        """Build a Flux-optimized image prompt (natural language style)."""
         parts = []
 
-        # Style prefix
-        style = STYLE_MODIFIERS.get(brief.style_preset, STYLE_MODIFIERS["photorealistic"])
+        # Style prefix (Flux prefers descriptive sentences)
+        style = FLUX_STYLES.get(brief.style_preset, FLUX_STYLES["cinematic"])
         parts.append(style["prefix"])
 
-        # Main subject from topic
+        # Main subject
         parts.append(brief.topic)
 
-        # Category-specific visuals
+        # Category visuals
         cat_visuals = CATEGORY_VISUALS.get(brief.category, [])
         if cat_visuals:
             parts.append(", ".join(cat_visuals[:3]))
 
-        # Lighting from LightingArtist (if set)
+        # Lighting (from LightingArtist if set)
         if brief.lighting_setup:
             parts.append(brief.lighting_setup)
 
@@ -217,7 +191,7 @@ class PromptEngineerAgent(CreativeAgent):
         if brief.composition_notes:
             parts.append(brief.composition_notes)
 
-        # Quality boosters
+        # Quality
         parts.extend(QUALITY_BOOSTERS[:3])
 
         # Style suffix
@@ -228,55 +202,34 @@ class PromptEngineerAgent(CreativeAgent):
         return prompt
 
     def _build_negative_prompt(self, brief: CreativeBrief) -> str:
-        """Build a negative prompt to avoid common issues."""
-        # Select base negative by category
         if brief.category == "recipe":
-            base = NEGATIVE_PROMPTS["food"]
-        elif brief.category == "fashion":
-            base = NEGATIVE_PROMPTS["portrait"]
+            return NEGATIVE_PROMPTS["food"]
         elif brief.category == "travel":
-            base = NEGATIVE_PROMPTS["landscape"]
-        else:
-            base = NEGATIVE_PROMPTS["universal"]
-
-        # Add style-specific negatives
-        style = STYLE_MODIFIERS.get(brief.style_preset, {})
-        extra = style.get("negative_extra", "")
-
-        return f"{base}, {extra}" if extra else base
+            return NEGATIVE_PROMPTS["landscape"]
+        return NEGATIVE_PROMPTS["universal"]
 
     def _build_video_prompt(self, brief: CreativeBrief) -> str:
-        """Build a prompt for Kling 3.0 video generation."""
-        motion_styles = {
-            "cinematic_slow": "slow cinematic camera movement, smooth dolly shot",
-            "dynamic_fast": "dynamic camera movement, fast cuts, energetic",
-            "moderate": "gentle camera pan, natural movement",
+        """Build a Kling 2.5 / Seedance optimized video prompt."""
+        motion_map = {
+            "cinematic_slow": "slow cinematic dolly shot, smooth camera glide, epic reveal",
+            "dynamic_fast": "dynamic handheld camera, fast cuts, energetic movement, action",
+            "moderate": "gentle camera pan, natural movement, steady tracking shot",
         }
-
-        motion = motion_styles.get(brief.pacing, motion_styles["moderate"])
+        motion = motion_map.get(brief.pacing, motion_map["moderate"])
 
         return (
             f"{brief.topic}, {motion}, "
-            f"professional video quality, {brief.mood or 'engaging'} atmosphere, "
-            f"smooth motion, high production value"
+            f"professional cinematography, {brief.mood or 'engaging'} mood, "
+            f"smooth motion, high production value, 9:16 vertical"
         )
 
     def _build_carousel_prompts(self, brief: CreativeBrief) -> list[str]:
-        """Build consistent prompts for each carousel slide."""
-        style = STYLE_MODIFIERS.get(brief.style_preset, STYLE_MODIFIERS["flat_design"])
+        style = FLUX_STYLES.get(brief.style_preset, FLUX_STYLES["flat_design"])
+        base = f"{style['prefix']}consistent style, modern design{style['suffix']}"
 
-        # Parse script for slide content if available
-        base_style = (
-            f"{style['prefix']}clean modern design, consistent style, "
-            f"{brief.mood or 'professional'} atmosphere{style['suffix']}"
-        )
-
-        # Default: create 4 slides
-        slides = [
-            f"{base_style}, title slide with text '{brief.hook_line}', bold typography, eye-catching",
-            f"{base_style}, informational slide about {brief.topic}, key points visualization",
-            f"{base_style}, detailed breakdown of {brief.topic}, icons and visual elements",
-            f"{base_style}, call to action slide, engaging design, '{brief.cta}'",
+        return [
+            f"{base}, title slide, bold typography, '{brief.hook_line}'",
+            f"{base}, informational slide about {brief.topic}, key points",
+            f"{base}, detailed breakdown of {brief.topic}, icons and visuals",
+            f"{base}, call to action slide, '{brief.cta}'",
         ]
-
-        return slides
