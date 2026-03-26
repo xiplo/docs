@@ -56,7 +56,7 @@ class TestPiAPITaskResult:
 
 class TestPiAPIClient:
     def test_configured_without_key(self):
-        with patch("clients.piapi.PIAPI_API_KEY", ""):
+        with patch("clients.piapi._get_piapi_key", return_value=""):
             client = PiAPIClient(api_key="")
             assert client.configured is False
 

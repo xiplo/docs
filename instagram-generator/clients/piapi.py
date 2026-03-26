@@ -28,7 +28,17 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 logger = structlog.get_logger(__name__)
 
 PIAPI_BASE_URL = "https://api.piapi.ai/api/v1"
-PIAPI_API_KEY = os.getenv("PIAPI_API_KEY", "")
+
+
+def _get_piapi_key() -> str:
+    """Get PiAPI key from config (reads .env) or environment."""
+    try:
+        from config import settings
+        if settings.piapi_api_key:
+            return settings.piapi_api_key
+    except Exception:
+        pass
+    return os.getenv("PIAPI_API_KEY", "")
 
 
 @dataclass
@@ -87,7 +97,7 @@ class PiAPIClient:
     """Unified PiAPI client for all generative AI models."""
 
     def __init__(self, api_key: str = "") -> None:
-        self._api_key = api_key or PIAPI_API_KEY
+        self._api_key = api_key or _get_piapi_key()
         self._client = httpx.AsyncClient(
             base_url=PIAPI_BASE_URL,
             timeout=30.0,
