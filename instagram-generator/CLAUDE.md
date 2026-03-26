@@ -5,7 +5,8 @@
 Full-stack content management system for multi-platform social media.
 Auto-generates and cross-posts Uzbek-language content across 7 platforms:
 Instagram, Twitter/X, TikTok, YouTube Shorts, Facebook, Telegram, LinkedIn.
-Powered by AI agents (Nano Banana images, Kling 3.0 video, Eleven Labs Uzbek TTS).
+Powered by PiAPI unified gateway (Flux images, Kling video, Seedance, Veo3),
+Claude claude-sonnet-4-6 for content intelligence, and Eleven Labs for Uzbek TTS.
 
 ## Architecture
 
@@ -360,12 +361,28 @@ Rules-based content dispatch:
 - Category performance breakdown
 - Top performer identification
 
-## Social Media Clients (12 total)
+## PiAPI integration (primary generation backend)
+
+`clients/piapi.py` — Unified gateway to all generative AI models via [piapi.ai](https://piapi.ai):
+
+| Model | Method | Use |
+|-------|--------|-----|
+| **Flux** (flux1-dev/schnell) | `flux_text_to_image()` | Image generation (replaces NanoBanana) |
+| **Kling** (1.0-2.5) | `kling_image_to_video()`, `kling_text_to_video()` | Video generation |
+| **Seedance 2.0** | `seedance_text_to_video()`, `seedance_image_to_video()` | Cinematic video |
+| **Veo3** | `veo3_image_to_video()` | Google video generation |
+
+Architecture: unified create/poll pattern — `POST /api/v1/task` → poll `GET /api/v1/task/{id}` → download result.
+Falls back to legacy NanoBanana/Kling clients when `PIAPI_API_KEY` is not set.
+
+## AI Clients (15 total)
 
 | Client | File | API |
 |--------|------|-----|
-| **NanoBanana** | `clients/nano_banana.py` | Image generation |
-| **Kling** | `clients/kling.py` | Video generation (Kling 3.0) |
+| **PiAPI** | `clients/piapi.py` | Unified gateway: Flux, Kling, Seedance, Veo3 |
+| **Claude** | `clients/claude_ai.py` | Claude claude-sonnet-4-6 for content intelligence |
+| **NanoBanana** | `clients/nano_banana.py` | Image generation (legacy fallback) |
+| **Kling** | `clients/kling.py` | Video generation (legacy fallback) |
 | **ElevenLabs** | `clients/elevenlabs.py` | Uzbek TTS |
 | **Instagram** | `clients/instagram.py` | Graph API (image, reel, carousel, story) |
 | **Twitter/X** | `clients/twitter.py` | v2 API (tweet, thread, media upload) |
@@ -472,9 +489,15 @@ instagram-generator/
 │   ├── campaigns.py       # Campaign management
 │   ├── analytics_aggregator.py  # Cross-platform analytics
 │   └── versioning.py      # Content version history
-├── clients/               # Social media & API clients (12)
-│   ├── nano_banana.py     # Image generation
-│   ├── kling.py           # Video generation (Kling 3.0)
+├── crm/                   # Customer relationship management
+│   ├── audience.py        # Audience segments (4 pre-built)
+│   ├── engagement.py      # Engagement tracking
+│   └── funnel.py          # Follower funnel (5 stages)
+├── clients/               # AI + social media clients (15)
+│   ├── piapi.py           # PiAPI unified gateway (Flux, Kling, Seedance, Veo3)
+│   ├── claude_ai.py       # Claude claude-sonnet-4-6 content intelligence
+│   ├── nano_banana.py     # Image generation (legacy fallback)
+│   ├── kling.py           # Video generation (legacy fallback)
 │   ├── elevenlabs.py      # Uzbek TTS
 │   ├── instagram.py       # Instagram Graph API
 │   ├── twitter.py         # Twitter/X v2 API
@@ -500,7 +523,8 @@ instagram-generator/
 │   ├── moderation.py      # Content safety & cultural checks
 │   ├── hashtags.py        # Hashtag research & banned detection
 │   ├── localization.py    # Multi-language captions (uz, ru, en)
-│   └── deduplication.py   # Content duplicate detection
+│   ├── deduplication.py   # Content duplicate detection
+│   └── ai_content.py     # Claude-powered content generation
 ├── strategy/              # Content strategy
 │   ├── engine.py          # Strategy planner
 │   ├── calendar.py        # Content calendar
@@ -538,7 +562,10 @@ instagram-generator/
 │   ├── test_optimizer.py  # Engagement optimizer tests
 │   ├── test_export.py     # Export/import tests
 │   ├── test_dedup_competitors.py  # Dedup + competitor tests
-│   └── test_versioning.py # Content version tests
+│   ├── test_versioning.py # Content version tests
+│   ├── test_ai_content.py # AI content generation tests
+│   ├── test_crm.py        # CRM module tests
+│   └── test_piapi.py      # PiAPI client tests
 └── utils/                 # Utilities
     ├── cdn.py             # S3/R2/MinIO/HTTP upload
     ├── media.py           # ffmpeg operations

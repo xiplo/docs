@@ -73,14 +73,27 @@ class ContentResult:
 
 
 class ContentPipeline:
-    """End-to-end creative generation and publishing pipeline."""
+    """End-to-end creative generation and publishing pipeline.
+
+    Uses PiAPI as primary generation backend (Flux images, Kling video).
+    Falls back to legacy clients (NanoBanana, Kling direct) when PiAPI is not configured.
+    """
 
     def __init__(self) -> None:
+        # PiAPI unified client (primary)
+        from clients.piapi import PiAPIClient
+        self.piapi = PiAPIClient()
+
+        # Legacy clients (fallback)
         self.nano_banana = NanoBananaClient()
         self.kling = KlingClient()
         self.elevenlabs = ElevenLabsClient()
         self.instagram = InstagramClient()
         self._output_dir = settings.content_output_dir
+
+    @property
+    def _use_piapi(self) -> bool:
+        return self.piapi.configured
 
     async def run(self, request: ContentRequest) -> ContentResult:
         """Execute the full pipeline for a content request."""
@@ -146,38 +159,78 @@ class ContentPipeline:
         run_dir: Path,
         result: ContentResult,
     ) -> None:
-        logger.info("pipeline.reel.start", prompt=req.image_prompt[:60])
+        logger.info(
+            "pipeline.reel.start",
+            prompt=req.image_prompt[:60],
+            backend="piapi" if self._use_piapi else "legacy",
+        )
 
-        # 1. Generate base image (rate-limited + circuit-breaker)
-        await get_limiter("nano_banana").acquire()
-        with metrics.timer("api_latency_seconds", provider="nano_banana"):
-            image_bytes = await get_breaker("nano_banana").call(
-                self.nano_banana.generate_image,
-                req.image_prompt,
-                style=req.image_style,
-                aspect_ratio="story",  # 9:16
-            )
-        metrics.inc("api_calls_total", provider="nano_banana")
-        image_path = run_dir / "base_image.png"
-        await self.nano_banana.save_image(image_bytes, image_path)
-        result.local_paths.append(str(image_path))
+        if self._use_piapi:
+            # --- PiAPI path: Flux image → Kling video ---
 
-        # 2. Upload image to CDN for Kling input
-        with metrics.timer("cdn_upload_seconds"):
-            image_cdn_url = await upload_to_cdn(image_path)
+            # 1. Generate image via Flux
+            with metrics.timer("api_latency_seconds", provider="piapi_flux"):
+                img_result = await self.piapi.flux_text_to_image(
+                    prompt=req.image_prompt,
+                    width=1080,
+                    height=1920,  # 9:16
+                )
+            metrics.inc("api_calls_total", provider="piapi_flux")
+            image_url = img_result.image_urls[0] if img_result.image_urls else ""
+            image_path = run_dir / "base_image.png"
+            await self.piapi.download(image_url, image_path)
+            result.local_paths.append(str(image_path))
 
-        # 3. Animate image → video via Kling 3.0
-        await get_limiter("kling").acquire()
-        with metrics.timer("api_latency_seconds", provider="kling"):
-            video_bytes = await get_breaker("kling").call(
-                self.kling.image_to_video,
-                image_url=image_cdn_url,
-                prompt=req.image_prompt,
-                duration=req.video_duration,
-            )
-        metrics.inc("api_calls_total", provider="kling")
-        raw_video_path = run_dir / "raw_video.mp4"
-        await self.kling.save_video(video_bytes, raw_video_path)
+            # 2. Upload to CDN
+            with metrics.timer("cdn_upload_seconds"):
+                image_cdn_url = await upload_to_cdn(image_path)
+
+            # 3. Animate via Kling through PiAPI
+            with metrics.timer("api_latency_seconds", provider="piapi_kling"):
+                vid_result = await self.piapi.kling_image_to_video(
+                    image_url=image_cdn_url,
+                    prompt=req.image_prompt,
+                    duration=int(req.video_duration),
+                    aspect_ratio="9:16",
+                )
+            metrics.inc("api_calls_total", provider="piapi_kling")
+            video_url = vid_result.video_urls[0] if vid_result.video_urls else ""
+            raw_video_path = run_dir / "raw_video.mp4"
+            await self.piapi.download(video_url, raw_video_path)
+
+        else:
+            # --- Legacy path: NanoBanana → Kling direct ---
+
+            # 1. Generate base image
+            await get_limiter("nano_banana").acquire()
+            with metrics.timer("api_latency_seconds", provider="nano_banana"):
+                image_bytes = await get_breaker("nano_banana").call(
+                    self.nano_banana.generate_image,
+                    req.image_prompt,
+                    style=req.image_style,
+                    aspect_ratio="story",
+                )
+            metrics.inc("api_calls_total", provider="nano_banana")
+            image_path = run_dir / "base_image.png"
+            await self.nano_banana.save_image(image_bytes, image_path)
+            result.local_paths.append(str(image_path))
+
+            # 2. Upload image to CDN
+            with metrics.timer("cdn_upload_seconds"):
+                image_cdn_url = await upload_to_cdn(image_path)
+
+            # 3. Animate image → video via Kling
+            await get_limiter("kling").acquire()
+            with metrics.timer("api_latency_seconds", provider="kling"):
+                video_bytes = await get_breaker("kling").call(
+                    self.kling.image_to_video,
+                    image_url=image_cdn_url,
+                    prompt=req.image_prompt,
+                    duration=req.video_duration,
+                )
+            metrics.inc("api_calls_total", provider="kling")
+            raw_video_path = run_dir / "raw_video.mp4"
+            await self.kling.save_video(video_bytes, raw_video_path)
 
         # 4. Generate Uzbek voiceover
         final_video_path = raw_video_path
@@ -301,17 +354,30 @@ class ContentPipeline:
         run_dir: Path,
         result: ContentResult,
     ) -> None:
-        logger.info("pipeline.image.start")
+        logger.info("pipeline.image.start", backend="piapi" if self._use_piapi else "legacy")
 
-        with metrics.timer("api_latency_seconds", provider="nano_banana"):
-            image_bytes = await self.nano_banana.generate_image(
-                req.image_prompt,
-                style=req.image_style,
-                aspect_ratio="feed_portrait",
-            )
-        metrics.inc("api_calls_total", provider="nano_banana")
-        image_path = run_dir / "post_image.png"
-        await self.nano_banana.save_image(image_bytes, image_path)
+        if self._use_piapi:
+            with metrics.timer("api_latency_seconds", provider="piapi_flux"):
+                img_result = await self.piapi.flux_text_to_image(
+                    prompt=req.image_prompt,
+                    width=1080,
+                    height=1350,  # 4:5 portrait
+                )
+            metrics.inc("api_calls_total", provider="piapi_flux")
+            image_url = img_result.image_urls[0] if img_result.image_urls else ""
+            image_path = run_dir / "post_image.png"
+            await self.piapi.download(image_url, image_path)
+        else:
+            with metrics.timer("api_latency_seconds", provider="nano_banana"):
+                image_bytes = await self.nano_banana.generate_image(
+                    req.image_prompt,
+                    style=req.image_style,
+                    aspect_ratio="feed_portrait",
+                )
+            metrics.inc("api_calls_total", provider="nano_banana")
+            image_path = run_dir / "post_image.png"
+            await self.nano_banana.save_image(image_bytes, image_path)
+
         result.local_paths.append(str(image_path))
 
         with metrics.timer("cdn_upload_seconds"):
@@ -339,6 +405,7 @@ class ContentPipeline:
         return text
 
     async def close(self) -> None:
+        await self.piapi.close()
         await self.nano_banana.close()
         await self.kling.close()
         await self.elevenlabs.close()
